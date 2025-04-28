@@ -14,6 +14,7 @@ class DataStoreManager(private val context: Context) {
     companion object {
         private val TOKEN_KEY = stringPreferencesKey("token")
         private val NAME_KEY = stringPreferencesKey("name")
+        private val DEVICES_KEY = stringPreferencesKey("devices")
     }
 
     suspend fun saveToken(token: String) {
@@ -54,4 +55,25 @@ class DataStoreManager(private val context: Context) {
             .map { prefs -> prefs[NAME_KEY] }
             .first()
     }
+
+    suspend fun getAllDevices() : String? {
+        val result : String? = context.dataStore.data
+            .map { prefs -> prefs[DEVICES_KEY] }
+            .first()
+
+        Log.d("DataStoreManager", "Get all devices from store: $result")
+
+        return context.dataStore.data
+            .map { prefs -> prefs[DEVICES_KEY] }
+            .first()
+    }
+
+    suspend fun saveAllDevices(json: String) {
+        Log.d("DataStoreManager", "Update all devices: $json")
+
+        context.dataStore.edit { prefs ->
+            prefs[DEVICES_KEY] = json
+        }
+    }
 }
+

@@ -1,6 +1,7 @@
 package com.jannikklein47.batterysync
 
 import android.content.Context
+import android.content.Intent
 import androidx.compose.runtime.*
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -16,13 +17,14 @@ class LoginViewModel(context: Context) : ViewModel() {
     var email by mutableStateOf("")
     var password by mutableStateOf("")
     var errorMessage by mutableStateOf("")
+    var savedContext = context
 
-    private val dataStoreManager = DataStoreManager(context)
+    private val dataStoreManager = DataStoreManager(savedContext)
 
     fun login() {
         Thread {
             try {
-                val url = URL("http://10.0.2.2:3000/login?email=$email&password=$password")
+                val url = URL("http://192.168.0.119:3000/login?email=$email&password=$password")
 
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
@@ -80,5 +82,10 @@ class LoginViewModel(context: Context) : ViewModel() {
         viewModelScope.launch {
             dataStoreManager.saveDeviceName(deviceName)
         }
+    }
+
+    fun restartService() {
+        val serviceIntent = Intent(savedContext, BatteryService::class.java)
+        savedContext.startForegroundService(serviceIntent)
     }
 }

@@ -12,28 +12,30 @@ import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
 
-class BatteryStatusReceiver : BroadcastReceiver() {
+
+class ChargingStatusReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
 
-        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        val batteryPct = (level / scale.toDouble())
+        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        val isCharging: Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING
+                || status == BatteryManager.BATTERY_STATUS_FULL
 
-        Log.d("BatteryReceiver", "Akkustand: $batteryPct")
+
+        Log.d("ChargingStatusReceiver", "Current charging status: $isCharging")
 
         CoroutineScope(Dispatchers.IO).launch {
             val token = DataStoreManager(context).getToken()
             val name = DataStoreManager(context).getDeviceName()
             if (!token.isNullOrEmpty() && !name.isNullOrEmpty()) {
-                sendBatteryStatusToServer(batteryPct, name, token)
+                sendBatteryStatusToServer(isCharging, name, token)
             }
         }
     }
 
-    private fun sendBatteryStatusToServer(batteryLevel: Double, name: String, token: String) {
+    private fun sendBatteryStatusToServer(isCharging: Boolean, name: String, token: String) {
         try {
-            val url = URL("http://192.168.0.119:3000/battery?device=$name&battery=$batteryLevel")
+            val url = URL("http://192.168.0.119:3000/battery?device=$name&chargingStatus=$isCharging")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", token)

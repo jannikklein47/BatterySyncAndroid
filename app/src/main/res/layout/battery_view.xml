@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_container"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:padding="4dp">
+
+    <!-- Battery Outline Background -->
+    <ImageView
+        android:id="@+id/battery_outline"
+        android:layout_width="100dp"
+        android:layout_height="40dp"
+        android:src="@drawable/battery_outline"
+        android:scaleType="fitXY" />
+
+    <!-- Battery Fill (shown behind text, cropped to width programmatically) -->
+    <ImageView
+        android:id="@+id/battery_level"
+        android:layout_width="43dp"
+        android:layout_height="21dp"
+        android:layout_gravity="center"
+        android:layout_marginStart="2dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="2dp"
+        android:src="@drawable/battery_fill"
+        android:scaleType="fitXY" />
+
+    <!-- Battery Nub -->
+    <ImageView
+        android:id="@+id/battery_nub"
+        android:layout_width="4dp"
+        android:layout_height="10dp"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginStart="-1dp"
+        android:src="@drawable/battery_nub"
+        android:scaleType="fitXY" />
+
+    <!-- Battery Percentage Text -->
+    <TextView
+        android:id="@+id/battery_text"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center"
+        android:text="100"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+</FrameLayout>

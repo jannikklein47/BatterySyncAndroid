@@ -54,6 +54,10 @@ fun LoginScreen(viewModel: LoginViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
             Text(viewModel.errorMessage)
         }
+
+        Button(onClick = { viewModel.restartService()}, modifier = Modifier.fillMaxWidth()) {
+            Text("Service neu starten")
+        }
     }
 }
 

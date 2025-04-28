@@ -2,9 +2,6 @@ package com.jannikklein47.batterysync
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
-//import android.content.Intent
-//import android.content.IntentFilter
-//import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,8 +10,6 @@ import androidx.compose.runtime.*
 import com.jannikklein47.batterysync.ui.theme.BatterySyncTheme
 
 class MainActivity : ComponentActivity() {
-
-    private val batteryReceiver = BatteryStatusReceiver()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         createNotificationChannel()
@@ -36,7 +31,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        unregisterReceiver(batteryReceiver)
     }
 
     private fun createNotificationChannel() {
