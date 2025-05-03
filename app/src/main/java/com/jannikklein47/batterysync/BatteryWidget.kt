@@ -31,7 +31,8 @@ class BatteryWidget : AppWidgetProvider() {
                 level >= 0.40 -> R.drawable.battery_fill_50
                 level >= 0.31 -> R.drawable.battery_fill_40
                 level >= 0.20 -> R.drawable.battery_fill_30
-                level >= 0.10 -> R.drawable.battery_fill_20
+                level >= 0.16 -> R.drawable.battery_fill_20
+                level >= 0.10 -> R.drawable.battery_fill_15
                 level >= 0.05 -> R.drawable.battery_fill_10
                 else        -> R.drawable.battery_fill_empty
             }

@@ -87,7 +87,7 @@ class BatteryService : Service() {
     fun getDevicesInfo(token: String) {
         Thread {
             try {
-                val url = URL("http://192.168.0.119:3000/battery")
+                val url = URL("http://164.30.68.206:3000/battery")
 
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"

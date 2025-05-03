@@ -35,7 +35,7 @@ class ChargingStatusReceiver : BroadcastReceiver() {
 
     private fun sendBatteryStatusToServer(isCharging: Boolean, name: String, token: String) {
         try {
-            val url = URL("http://192.168.0.119:3000/battery?device=$name&chargingStatus=$isCharging")
+            val url = URL("http://164.30.68.206:3000/battery?device=$name&chargingStatus=$isCharging")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", token)

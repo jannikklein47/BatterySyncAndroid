@@ -24,7 +24,7 @@ class LoginViewModel(context: Context) : ViewModel() {
     fun login() {
         Thread {
             try {
-                val url = URL("http://192.168.0.119:3000/login?email=$email&password=$password")
+                val url = URL("http://164.30.68.206:3000/login?email=$email&password=$password")
 
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"

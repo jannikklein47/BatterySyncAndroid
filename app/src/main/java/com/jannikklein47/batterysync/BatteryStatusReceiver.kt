@@ -33,7 +33,7 @@ class BatteryStatusReceiver : BroadcastReceiver() {
 
     private fun sendBatteryStatusToServer(batteryLevel: Double, name: String, token: String) {
         try {
-            val url = URL("http://192.168.0.119:3000/battery?device=$name&battery=$batteryLevel")
+            val url = URL("http://164.30.68.206:3000/battery?device=$name&battery=$batteryLevel")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", token)
