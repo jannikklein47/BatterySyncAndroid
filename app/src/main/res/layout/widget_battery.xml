@@ -4,7 +4,8 @@
     android:layout_height="wrap_content"
     android:background="@color/widget_bg"
     android:orientation="horizontal"
-    android:padding="12dp"
+    android:paddingVertical="8dp"
+    android:paddingHorizontal="5dp"
     android:id="@+id/widget_layout"
     >
 

@@ -10,6 +10,7 @@
     <color name="battery_green">#009900</color>
     <color name="battery_yellow">#ffea00</color>
     <color name="battery_red">#990000</color>
-    <color name="widget_bg">#88050010</color>
+    <color name="widget_bg">#FFFFFF</color>
+    <color name="device_bg">#EFEFEF</color>
 
 </resources>

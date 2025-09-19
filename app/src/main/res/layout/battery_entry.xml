@@ -5,7 +5,11 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:visibility="visible"
-    android:id="@+id/battery_entry">
+    android:id="@+id/battery_entry"
+    android:background="@drawable/device_layout_bg"
+    android:layout_marginHorizontal="4dp"
+    android:padding="4dp"
+    >
 
     <TextView
         android:id="@+id/battery_device_name"
@@ -14,7 +18,7 @@
         android:gravity="center"
         android:text="Handy\n "
         android:textAlignment="center"
-        android:textColor="#FFFFFF"
+        android:textColor="#000000"
         android:textFontWeight="700"
         android:textSize="11sp" />
 
@@ -59,7 +63,7 @@
                 android:id="@+id/battery_text"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="@color/white"
+                android:textColor="@color/black"
                 android:text="100"
                 android:textSize="18sp"
                 android:textStyle="bold" />

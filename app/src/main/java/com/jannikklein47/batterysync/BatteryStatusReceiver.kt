@@ -20,20 +20,28 @@ class BatteryStatusReceiver : BroadcastReceiver() {
         val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
         val batteryPct = (level / scale.toDouble())
 
+        val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+        val isCharging: Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING
+
+        val chargePlug = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
+        val isPluggedIn = chargePlug == BatteryManager.BATTERY_PLUGGED_AC ||
+                chargePlug == BatteryManager.BATTERY_PLUGGED_USB ||
+                chargePlug == BatteryManager.BATTERY_PLUGGED_WIRELESS
+
         Log.d("BatteryReceiver", "Akkustand: $batteryPct")
 
         CoroutineScope(Dispatchers.IO).launch {
             val token = DataStoreManager(context).getToken()
             val name = DataStoreManager(context).getDeviceName()
             if (!token.isNullOrEmpty() && !name.isNullOrEmpty()) {
-                sendBatteryStatusToServer(batteryPct, name, token)
+                sendBatteryStatusToServer(batteryPct, isCharging, isPluggedIn, name, token)
             }
         }
     }
 
-    private fun sendBatteryStatusToServer(batteryLevel: Double, name: String, token: String) {
+    private fun sendBatteryStatusToServer(batteryLevel: Double, chargingStatus: Boolean, isPluggedIn: Boolean, name: String, token: String) {
         try {
-            val url = URL("http://164.30.68.206:3000/battery?device=$name&battery=$batteryLevel")
+            val url = URL("http://164.30.68.206:3000/battery?device=$name&battery=$batteryLevel&chargingStatus=$chargingStatus&isPluggedIn=$isPluggedIn")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", token)

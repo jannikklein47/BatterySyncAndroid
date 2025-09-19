@@ -19,23 +19,31 @@ class ChargingStatusReceiver : BroadcastReceiver() {
 
         val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
         val isCharging: Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING
-                || status == BatteryManager.BATTERY_STATUS_FULL
+
+        val chargePlug = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
+        val isPluggedIn = chargePlug == BatteryManager.BATTERY_PLUGGED_AC ||
+                chargePlug == BatteryManager.BATTERY_PLUGGED_USB ||
+                chargePlug == BatteryManager.BATTERY_PLUGGED_WIRELESS
+
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        val batteryPct = (level / scale.toDouble())
 
 
-        Log.d("ChargingStatusReceiver", "Current charging status: $isCharging")
+        Log.d("ChargingStatusReceiver", "Current charging status: $isCharging, plugged: $isPluggedIn")
 
         CoroutineScope(Dispatchers.IO).launch {
             val token = DataStoreManager(context).getToken()
             val name = DataStoreManager(context).getDeviceName()
             if (!token.isNullOrEmpty() && !name.isNullOrEmpty()) {
-                sendBatteryStatusToServer(isCharging, name, token)
+                sendBatteryStatusToServer(isCharging, isPluggedIn, name, token, batteryPct)
             }
         }
     }
 
-    private fun sendBatteryStatusToServer(isCharging: Boolean, name: String, token: String) {
+    private fun sendBatteryStatusToServer(isCharging: Boolean, isPluggedIn: Boolean, name: String, token: String, battery: Double) {
         try {
-            val url = URL("http://164.30.68.206:3000/battery?device=$name&chargingStatus=$isCharging")
+            val url = URL("http://164.30.68.206:3000/battery?device=$name&chargingStatus=$isCharging&battery=$battery&isPluggedIn=$isPluggedIn")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", token)
