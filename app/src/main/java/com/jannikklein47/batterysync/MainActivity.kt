@@ -2,12 +2,20 @@ package com.jannikklein47.batterysync
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.*
+import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import com.jannikklein47.batterysync.ui.theme.BatterySyncTheme
+import android.Manifest
 
 class MainActivity : ComponentActivity() {
 
@@ -39,9 +47,16 @@ class MainActivity : ComponentActivity() {
             "Battery Service",
             NotificationManager.IMPORTANCE_DEFAULT
         )
+        val notiChannel = NotificationChannel(
+            "not_channel",
+            "Notification Channel",
+            NotificationManager.IMPORTANCE_DEFAULT
+        )
         val manager = getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(serviceChannel)
+        manager.createNotificationChannel(notiChannel)
 
     }
 
 }
+

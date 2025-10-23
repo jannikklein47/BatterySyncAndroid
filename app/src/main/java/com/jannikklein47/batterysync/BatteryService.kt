@@ -1,14 +1,20 @@
 package com.jannikklein47.batterysync
 
+import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.appwidget.AppWidgetManager
 import android.content.*
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.util.Log
-import androidx.*
 import androidx.core.app.NotificationCompat
-import androidx.lifecycle.viewModelScope
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,13 +22,32 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Timer
 import java.util.TimerTask
+import android.content.Context
+import android.content.Intent
+import android.widget.Toast
+import android.os.Handler
+import android.os.Looper
+import kotlinx.serialization.*
+import kotlinx.serialization.json.*
 
 class BatteryService : Service() {
     private lateinit var batteryReceiver: BatteryStatusReceiver
     private lateinit var chargingReceiver: ChargingStatusReceiver
     private var timer: Timer? = null
+    private var notificationTimer: Timer? = null
     private var timerStop: Boolean = false
+    private var startInfoNotificationSent: Boolean = false
 
+    @OptIn(kotlinx.serialization.InternalSerializationApi::class)
+    @Serializable
+    data class DevicePrediction(
+        val targetName: String,
+        val predictedZeroAt: String
+    )
+
+    fun parseJson(json: String): List<DevicePrediction> {
+        return Json.decodeFromString(json)
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -46,9 +71,14 @@ class BatteryService : Service() {
 
         // Timer starten (alle 30 Sekunden)
         startTimer()
+        startNotificationTimer()
     }
 
     fun startTimer() {
+        if (!startInfoNotificationSent) {
+            sendNotificationSafe(applicationContext, "BatterySync läuft", "Die App wird dich nun stets mit aktuellen Daten versorgen.", false)
+            startInfoNotificationSent = true
+        }
         timer = Timer()
         timer?.schedule(object: TimerTask() {
 
@@ -66,13 +96,35 @@ class BatteryService : Service() {
                             getDevicesInfo(token)
                         }
                     }
-                } else Log.d("BatteryService", "Timer skipped execution")
+                }
 
                 if (!timerStop) {
                     startTimer()
                 }
             }
         }, 10000)
+    }
+
+    fun startNotificationTimer() {
+        notificationTimer = Timer()
+        notificationTimer?.schedule(object: TimerTask() {
+
+            override fun run() {
+                Log.d("BatteryService Notification", "Notification Timer execution")
+
+                CoroutineScope(Dispatchers.IO).launch {
+                    val token = DataStoreManager(applicationContext).getToken()
+                    val deviceName = DataStoreManager(applicationContext).getDeviceName()
+                    if (!token.isNullOrEmpty() && !deviceName.isNullOrEmpty()) {
+                        getDueNotifications(token,deviceName)
+                    }
+                }
+
+                if (!timerStop) {
+                    startNotificationTimer()
+                }
+            }
+        }, 30000)
     }
 
     override fun onDestroy() {
@@ -84,10 +136,46 @@ class BatteryService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    fun getDueNotifications(token: String, deviceName: String) {
+        Thread {
+            try {
+
+                val url = URL("https://batterysync.chickenkiller.com:3000/notification/due?deviceToDisplay=$deviceName")
+
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                connection.setRequestProperty("Contenty-Type","application/json")
+                connection.setRequestProperty("Authorization", token)
+
+                val responseCode = connection.responseCode
+                if (responseCode == 200) {
+                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                    Log.d("BatteryService Notification GET", "Antwort: $response")
+
+                    var notifications = parseJson(response)
+
+                    for (noti in notifications) {
+                        sendNotificationSafe(applicationContext, "Lade dein ${noti.targetName} auf!", "Dein Gerät wird in weniger als 2 Stunden leer sein. Lade es auf, damit es nicht aus geht.", true)
+                    }
+
+                } else {
+                    Log.e("BatteryService Notification GET", "Serverfehler: $responseCode")
+                }
+
+                connection.disconnect()
+
+            } catch (e: Exception) {
+                Log.e("BatteryService Notification GET", "Fehler beim Senden: ${e}")
+            }
+        }.start()
+    }
+
     fun getDevicesInfo(token: String) {
         Thread {
             try {
-                val url = URL("http://164.30.68.206:3000/battery")
+                val url = URL("https://batterysync.chickenkiller.com:3000/battery")
 
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
@@ -124,5 +212,65 @@ class BatteryService : Service() {
             BatteryWidget.updateWidget(context, manager, widgetId)
         }
     }
+
+    fun sendNotification(context: Context, title: String, message: String, loud: Boolean) {
+        var channelId = "notiChannel"
+        if (loud) channelId = "notiChannelLoud"
+
+        // 1️⃣ Create the channel if needed
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "General Notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "App notifications"
+            }
+            val manager = context.getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+
+        // 2️⃣ Build the notification
+        val intent = Intent(context, context::class.java) // Opens the same activity
+        val pendingIntent = PendingIntent.getActivity(
+            context,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(context, channelId)
+            .setSmallIcon(R.drawable.ic_stat_name)
+            .setContentTitle(title)
+            .setContentText(message)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+
+        // 3️⃣ Check permission (Android 13+)
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            Toast.makeText(
+                context,
+                "Notification permission not granted. Please enable it in settings.",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+
+        // 4️⃣ Send notification
+        NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), builder.build())
+    }
+
+    fun sendNotificationSafe(context: Context, title: String, message: String, loud: Boolean) {
+        val mainHandler = Handler(Looper.getMainLooper())
+        mainHandler.post {
+            sendNotification(context, title, message, loud) // the function we wrote before
+        }
+    }
+
+
 
 }

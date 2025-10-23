@@ -5,4 +5,8 @@
     android:updatePeriodMillis="0"
     android:initialLayout="@layout/widget_battery"
     android:resizeMode="horizontal|vertical"
-    android:widgetCategory="home_screen" />
+    android:widgetCategory="home_screen"/>
+    <!--
+    android:configure="com.jannikklein47.batterysync.WidgetConfigurationActivity"
+    android:widgetFeatures="reconfigurable"-->
+

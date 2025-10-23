@@ -41,7 +41,7 @@ class BatteryStatusReceiver : BroadcastReceiver() {
 
     private fun sendBatteryStatusToServer(batteryLevel: Double, chargingStatus: Boolean, isPluggedIn: Boolean, name: String, token: String) {
         try {
-            val url = URL("http://164.30.68.206:3000/battery?device=$name&battery=$batteryLevel&chargingStatus=$chargingStatus&isPluggedIn=$isPluggedIn")
+            val url = URL("https://batterysync.chickenkiller.com:3000/battery?device=$name&battery=$batteryLevel&chargingStatus=$chargingStatus&isPluggedIn=$isPluggedIn")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", token)
