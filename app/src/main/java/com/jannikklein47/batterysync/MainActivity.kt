@@ -16,6 +16,13 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.jannikklein47.batterysync.ui.theme.BatterySyncTheme
 import android.Manifest
+import android.os.Build
+import android.util.Log
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -32,6 +39,10 @@ class MainActivity : ComponentActivity() {
                 LoginScreen(viewModel = loginViewModel)
             }
         }
+
+
+        requestRequiredPermissions()
+
 
         //val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
         //registerReceiver(batteryReceiver, filter);
@@ -57,6 +68,42 @@ class MainActivity : ComponentActivity() {
         manager.createNotificationChannel(notiChannel)
 
     }
+
+    private val requiredPermissions = buildList {
+        if (Build.VERSION.SDK_INT >= 33)
+            add(Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    private fun hasAllPermissions(): Boolean =
+        requiredPermissions.all { perm ->
+            ContextCompat.checkSelfPermission(this, perm) == PackageManager.PERMISSION_GRANTED
+        }
+
+    private fun requestRequiredPermissions() {
+        if (!hasAllPermissions()) {
+            ActivityCompat.requestPermissions(this, requiredPermissions.toTypedArray(), 42)
+        } else {
+            Log.d("Permissions","All Permissions are granted.")
+        }
+    }
+
+    // handle result (for API <33)
+    @Deprecated("Deprecated in Java")
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 42 && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+            Log.d("Permissions", "All granted!")
+        } else {
+            Log.d("Permissions", "Not granted")
+        }
+    }
+
+
+
 
 }
 
