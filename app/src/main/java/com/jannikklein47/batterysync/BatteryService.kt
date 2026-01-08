@@ -42,8 +42,15 @@ class BatteryService : Service() {
     @Serializable
     data class DevicePrediction(
         val targetName: String,
-        val predictedZeroAt: String
+        val predictedZeroAt: String,
+        val content: String,
+        val title: String,
+        val type: String,
     )
+
+    companion object {
+        var isRunning = false
+    }
 
     fun parseJson(json: String): List<DevicePrediction> {
         return Json.decodeFromString(json)
@@ -72,11 +79,13 @@ class BatteryService : Service() {
         // Timer starten (alle 30 Sekunden)
         startTimer()
         startNotificationTimer()
+
+        isRunning = true
     }
 
     fun startTimer() {
         if (!startInfoNotificationSent) {
-            sendNotificationSafe(applicationContext, "BatterySync läuft", "Die App wird dich nun stets mit aktuellen Daten versorgen.", false)
+            //sendNotificationSafe(applicationContext, "BatterySync läuft", "Die App wird dich nun stets mit aktuellen Daten versorgen.", false)
             startInfoNotificationSent = true
         }
         timer = Timer()
@@ -92,7 +101,10 @@ class BatteryService : Service() {
                     // Bildschirm ist an → Update ist sinnvoll
                     CoroutineScope(Dispatchers.IO).launch {
                         val token = DataStoreManager(applicationContext).getToken()
-                        if (token != null) {
+                        val uuid = DataStoreManager(applicationContext).getUuid()
+                        if (!token.isNullOrEmpty() && !uuid.isNullOrEmpty()) {
+                            getDevicesInfo(token, uuid)
+                        } else if (!token.isNullOrEmpty()) {
                             getDevicesInfo(token)
                         }
                     }
@@ -114,9 +126,9 @@ class BatteryService : Service() {
 
                 CoroutineScope(Dispatchers.IO).launch {
                     val token = DataStoreManager(applicationContext).getToken()
-                    val deviceName = DataStoreManager(applicationContext).getDeviceName()
-                    if (!token.isNullOrEmpty() && !deviceName.isNullOrEmpty()) {
-                        getDueNotifications(token,deviceName)
+                    val uuid = DataStoreManager(applicationContext).getUuid()
+                    if (!token.isNullOrEmpty() && !uuid.isNullOrEmpty()) {
+                        getDueNotifications(token,uuid)
                     }
                 }
 
@@ -131,22 +143,24 @@ class BatteryService : Service() {
         super.onDestroy()
         timerStop = true
         timer?.cancel() // Timer stoppen, wenn Service beendet wird
+        notificationTimer?.cancel()
         unregisterReceiver(batteryReceiver)
+        isRunning = false
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    fun getDueNotifications(token: String, deviceName: String) {
+    fun getDueNotifications(token: String, uuid: String) {
         Thread {
             try {
 
-                val url = URL("https://batterysync.chickenkiller.com:3000/notification/due?deviceToDisplay=$deviceName")
+                val url = URL("https://batterysync.de:3000/notification/due?uuid=$uuid")
 
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.connectTimeout = 5000
                 connection.readTimeout = 5000
-                connection.setRequestProperty("Contenty-Type","application/json")
+                connection.setRequestProperty("Content-Type","application/json")
                 connection.setRequestProperty("Authorization", token)
 
                 val responseCode = connection.responseCode
@@ -157,7 +171,13 @@ class BatteryService : Service() {
                     var notifications = parseJson(response)
 
                     for (noti in notifications) {
-                        sendNotificationSafe(applicationContext, "Lade dein ${noti.targetName} auf!", "Dein Gerät wird in weniger als 2 Stunden leer sein. Lade es auf, damit es nicht aus geht.", true)
+                        if (noti.type.uppercase() == "CONTENT") {
+                            sendNotificationSafe(applicationContext, noti.title, noti.content, true)
+
+                        } else {
+                            sendNotificationSafe(applicationContext, "Lade dein ${noti.targetName} auf!", "Dein Gerät wird in weniger als 2 Stunden leer sein. Lade es auf, damit es nicht aus geht.", true)
+
+                        }
                     }
 
                 } else {
@@ -175,7 +195,7 @@ class BatteryService : Service() {
     fun getDevicesInfo(token: String) {
         Thread {
             try {
-                val url = URL("https://batterysync.chickenkiller.com:3000/battery")
+                val url = URL("https://batterysync.de:3000/battery")
 
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
@@ -204,6 +224,39 @@ class BatteryService : Service() {
         }.start()
     }
 
+    fun getDevicesInfo(token: String, uuid: String) {
+        Thread {
+            try {
+                val url = URL("https://batterysync.de:3000/battery/secure?uuid=$uuid")
+
+                val connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                connection.setRequestProperty("Contenty-Type","application/json")
+                connection.setRequestProperty("Authorization", token)
+
+                val responseCode = connection.responseCode
+                if (responseCode == 200) {
+                    val response = connection.inputStream.bufferedReader().use { it.readText() }
+                    Log.d("BatteryService GET SECURE", "Antwort: $response")
+                    CoroutineScope(Dispatchers.IO).launch {
+                        DataStoreManager(applicationContext).saveAllDevices(response)
+                        notifyWidgets(applicationContext)
+                    }
+
+                } else {
+                    Log.e("BatteryService GET SECURE", "Serverfehler: $responseCode")
+                }
+
+                connection.disconnect()
+            } catch (e: Exception) {
+                Log.e("BatteryService GET SECURE", "Fehler beim Senden: ${e}")
+            }
+        }.start()
+    }
+
+
     fun notifyWidgets(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
         val widgetIds = manager.getAppWidgetIds(ComponentName(context, BatteryWidget::class.java))
@@ -217,18 +270,16 @@ class BatteryService : Service() {
         var channelId = "notiChannel"
         if (loud) channelId = "notiChannelLoud"
 
-        // 1️⃣ Create the channel if needed
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                channelId,
-                "General Notifications",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "App notifications"
-            }
-            val manager = context.getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            channelId,
+            "General Notifications",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "App notifications"
         }
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(channel)
+
 
         // 2️⃣ Build the notification
         val intent = Intent(context, context::class.java) // Opens the same activity
@@ -251,12 +302,17 @@ class BatteryService : Service() {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
             != PackageManager.PERMISSION_GRANTED
         ) {
-            Toast.makeText(
-                context,
-                "Notification permission not granted. Please enable it in settings.",
-                Toast.LENGTH_LONG
-            ).show()
-            return
+            try {
+                Toast.makeText(
+                    context,
+                    "Notification permission not granted. Please enable it in settings.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return
+            } catch (e: Exception) {
+                Log.e("BatteryService", "Could not toast notification permission hint")
+            }
+
         }
 
 

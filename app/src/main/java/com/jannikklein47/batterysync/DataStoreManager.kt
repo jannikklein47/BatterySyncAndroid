@@ -15,12 +15,20 @@ class DataStoreManager(private val context: Context) {
         private val TOKEN_KEY = stringPreferencesKey("token")
         private val NAME_KEY = stringPreferencesKey("name")
         private val DEVICES_KEY = stringPreferencesKey("devices")
+        private val UUID_KEY = stringPreferencesKey("uuid")
     }
 
     suspend fun saveToken(token: String) {
         Log.d("DataStoreManager", "Update saved token: $token")
         context.dataStore.edit { prefs ->
             prefs[TOKEN_KEY] = token
+        }
+    }
+
+    suspend fun saveUUID(uuid: String) {
+        Log.d("DataStoreManager", "Save uuid")
+        context.dataStore.edit { prefs ->
+            prefs[UUID_KEY] = uuid
         }
     }
 
@@ -33,6 +41,14 @@ class DataStoreManager(private val context: Context) {
 
         return context.dataStore.data
             .map { prefs -> prefs[TOKEN_KEY] }
+            .first()
+    }
+
+    suspend fun getUuid(): String? {
+        Log.d("DataStoreManager", "Get uuid from store")
+
+        return context.dataStore.data
+            .map { prefs -> prefs[UUID_KEY] }
             .first()
     }
 

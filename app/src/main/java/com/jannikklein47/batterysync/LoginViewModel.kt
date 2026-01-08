@@ -24,7 +24,7 @@ class LoginViewModel(context: Context) : ViewModel() {
     fun login() {
         Thread {
             try {
-                val url = URL("https://batterysync.chickenkiller.com:3000/login?email=$email&password=$password")
+                val url = URL("https://batterysync.de:3000/login?email=$email&password=$password")
 
                 val connection = url.openConnection() as HttpURLConnection
                 connection.requestMethod = "POST"
@@ -49,19 +49,6 @@ class LoginViewModel(context: Context) : ViewModel() {
                 Log.e("BatterySender", "Fehler beim Senden: ${e}")
             }
         }.start()
-
-
-            /*
-            if (email == "test" && password == "test") {
-                //val fakeToken = "\$2b\$11\$2UFkElxKzuk1L9RdCqIBL.7rjflF6bX/BHjqS3ZUvNgBk1Lb76ouu"
-                val fakeToken = "\$2b\$11\$2UFkElxKzuk1L9RdCqIBL.7rjflF6bX/BHjqS3ZUvNgBk1Lb76ouu"
-                dataStoreManager.saveToken(fakeToken)
-                errorMessage = "Login erfolgreich!"
-            } else {
-                errorMessage = "Login fehlgeschlagen."
-            }
-
-             */
 
     }
 

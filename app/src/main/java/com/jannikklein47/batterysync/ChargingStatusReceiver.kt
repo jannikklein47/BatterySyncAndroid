@@ -12,10 +12,13 @@ import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
 
-
 class ChargingStatusReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
+
+        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+        val batteryPct = (level / scale.toDouble())
 
         val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
         val isCharging: Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING
@@ -25,31 +28,26 @@ class ChargingStatusReceiver : BroadcastReceiver() {
                 chargePlug == BatteryManager.BATTERY_PLUGGED_USB ||
                 chargePlug == BatteryManager.BATTERY_PLUGGED_WIRELESS
 
-        val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-        val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        val batteryPct = (level / scale.toDouble())
-
-
-        Log.d("ChargingStatusReceiver", "Current charging status: $isCharging, plugged: $isPluggedIn")
+        Log.d("BatteryReceiver", "Akkustand: $batteryPct")
 
         CoroutineScope(Dispatchers.IO).launch {
             val token = DataStoreManager(context).getToken()
-            val name = DataStoreManager(context).getDeviceName()
-            if (!token.isNullOrEmpty() && !name.isNullOrEmpty()) {
-                sendBatteryStatusToServer(isCharging, isPluggedIn, name, token, batteryPct)
+            val uuid = DataStoreManager(context).getUuid()
+            if (!token.isNullOrEmpty() && !uuid.isNullOrEmpty()) {
+                sendBatteryStatusToServer(uuid, batteryPct, isCharging, isPluggedIn, token)
             }
         }
     }
 
-    private fun sendBatteryStatusToServer(isCharging: Boolean, isPluggedIn: Boolean, name: String, token: String, battery: Double) {
+    private fun sendBatteryStatusToServer(uuid: String, batteryLevel: Double, chargingStatus: Boolean, isPluggedIn: Boolean, token: String) {
         try {
-            val url = URL("https://batterysync.chickenkiller.com:3000/battery?device=$name&chargingStatus=$isCharging&battery=$battery&isPluggedIn=$isPluggedIn")
+            val url = URL("https://batterysync.de:3000/battery/secure?uuid=$uuid&battery=$batteryLevel&chargingStatus=$chargingStatus&isPluggedIn=$isPluggedIn")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", token)
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
-            connection.setRequestProperty("Contenty-Type","application/json")
+            connection.setRequestProperty("Content-Type","application/json")
 
 
             val responseCode = connection.responseCode
@@ -65,4 +63,5 @@ class ChargingStatusReceiver : BroadcastReceiver() {
             Log.e("BatterySender", "Fehler beim Senden: ${e.localizedMessage}")
         }
     }
+
 }

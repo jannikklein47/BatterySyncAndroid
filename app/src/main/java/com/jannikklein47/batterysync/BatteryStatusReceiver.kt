@@ -32,22 +32,22 @@ class BatteryStatusReceiver : BroadcastReceiver() {
 
         CoroutineScope(Dispatchers.IO).launch {
             val token = DataStoreManager(context).getToken()
-            val name = DataStoreManager(context).getDeviceName()
-            if (!token.isNullOrEmpty() && !name.isNullOrEmpty()) {
-                sendBatteryStatusToServer(batteryPct, isCharging, isPluggedIn, name, token)
+            val uuid = DataStoreManager(context).getUuid()
+            if (!token.isNullOrEmpty() && !uuid.isNullOrEmpty()) {
+                sendBatteryStatusToServer(uuid, batteryPct, isCharging, isPluggedIn, token)
             }
         }
     }
 
-    private fun sendBatteryStatusToServer(batteryLevel: Double, chargingStatus: Boolean, isPluggedIn: Boolean, name: String, token: String) {
+    private fun sendBatteryStatusToServer(uuid: String, batteryLevel: Double, chargingStatus: Boolean, isPluggedIn: Boolean, token: String) {
         try {
-            val url = URL("https://batterysync.chickenkiller.com:3000/battery?device=$name&battery=$batteryLevel&chargingStatus=$chargingStatus&isPluggedIn=$isPluggedIn")
+            val url = URL("https://batterysync.de:3000/battery/secure?uuid=$uuid&battery=$batteryLevel&chargingStatus=$chargingStatus&isPluggedIn=$isPluggedIn")
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "POST"
             connection.setRequestProperty("Authorization", token)
             connection.connectTimeout = 5000
             connection.readTimeout = 5000
-            connection.setRequestProperty("Contenty-Type","application/json")
+            connection.setRequestProperty("Content-Type","application/json")
 
 
             val responseCode = connection.responseCode
