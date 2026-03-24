@@ -297,6 +297,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             generalLoadingState = false
                             generalErrorMessage = connection.responseMessage
+                            Log.d("MainActivity", "Could not get username")
                         }
                     } else {
                         generalLoadingState = false
@@ -688,13 +689,18 @@ class MainActivity : ComponentActivity() {
             var startDestination = "login"
 
             if (!token.isNullOrEmpty()) {
-
+                Log.d("MainActivity", "Found Token")
                 getUsername(onSuccess = {
-                    startDestination = "home"
+                    Log.d("MainActivity", "Got user name")
                     checkRegistrationStatus()
                     getDeviceList()
                     foregroundInterval()
+                    startDestination = "home"
+                    navController.navigate("home")
                 })
+
+            } else {
+                Log.d("MainActivity", "Did not find Token")
 
             }
 
@@ -748,9 +754,27 @@ class MainActivity : ComponentActivity() {
                 }
 
                 composable("home") { backStackEntry ->
-                    HomeScreen().display(displayUsername, registrationStatus, ownDisplayName, uuid, generalLoadingState, generalErrorMessage, deviceList, deviceListIsRefreshing, foregroundServiceIsRunning, logout = { delete ->
-                        if (registrationStatus) {
-                            logout(delete) {
+                    HomeScreen().display(displayUsername, registrationStatus, ownDisplayName, uuid, generalLoadingState, generalErrorMessage, deviceList, deviceListIsRefreshing, foregroundServiceIsRunning,
+                        logout = { delete ->
+                            if (registrationStatus) {
+                                logout(delete) {
+                                    Log.d("MainActiviy", "Navigate to login")
+                                    generalErrorMessage = null
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        dataStoreManager.saveToken("")
+                                        dataStoreManager.saveAllDevices("[]")
+                                        dataStoreManager.saveUUID("")
+                                        displayUsername = ""
+                                        ownDisplayName = null
+                                        registrationStatus = false
+                                        uuid = null
+                                        token = null
+                                    }
+                                    navController.navigate("login") {
+                                        popUpTo("home") { inclusive = true }  // verhindert „Zurück zur Loginseite“
+                                    }
+                                }
+                            } else {
                                 Log.d("MainActiviy", "Navigate to login")
                                 generalErrorMessage = null
                                 CoroutineScope(Dispatchers.IO).launch {
@@ -767,25 +791,6 @@ class MainActivity : ComponentActivity() {
                                     popUpTo("home") { inclusive = true }  // verhindert „Zurück zur Loginseite“
                                 }
                             }
-                        } else {
-                            Log.d("MainActiviy", "Navigate to login")
-                            generalErrorMessage = null
-                            CoroutineScope(Dispatchers.IO).launch {
-                                dataStoreManager.saveToken("")
-                                dataStoreManager.saveAllDevices("[]")
-                                dataStoreManager.saveUUID("")
-                                displayUsername = ""
-                                ownDisplayName = null
-                                registrationStatus = false
-                                uuid = null
-                                token = null
-                            }
-                            navController.navigate("login") {
-                                popUpTo("home") { inclusive = true }  // verhindert „Zurück zur Loginseite“
-                            }
-                        }
-
-
                     }, onOpenReplaceOld = {
                         Log.d("MainActivity", "Navigate to replaceDevice")
                         getDeviceList()
