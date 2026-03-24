@@ -272,39 +272,45 @@ class MainActivity : ComponentActivity() {
         }
         fun getUsername(onSuccess: () -> Unit) {
             Thread {
-                try {
-                    generalLoadingState = true
-                    CoroutineScope(Dispatchers.IO).launch {
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        generalLoadingState = true
+
                         token = dataStoreManager.getToken()
-                    }
-                    if (!token.isNullOrEmpty()) {
-                        val url = URL("https://batterysync.de:3000/login/auth")
-                        val connection = url.openConnection() as HttpURLConnection
-                        connection.requestMethod = "GET"
-                        connection.connectTimeout = 5000
-                        connection.readTimeout = 5000
-                        connection.setRequestProperty("Content-Type","application/json")
-                        connection.setRequestProperty("Authorization", token)
 
-                        val responseCode = connection.responseCode
+                        if (!token.isNullOrEmpty()) {
+                            val url = URL("https://batterysync.de:3000/login/auth")
+                            val connection = url.openConnection() as HttpURLConnection
+                            connection.requestMethod = "GET"
+                            connection.connectTimeout = 5000
+                            connection.readTimeout = 5000
+                            connection.setRequestProperty("Content-Type", "application/json")
+                            connection.setRequestProperty("Authorization", token)
 
-                        if (responseCode == 200) {
-                            val response = connection.inputStream.bufferedReader().use { it.readText() }
-                            displayUsername = response
-                            generalLoadingState = false
-                            onSuccess()
+                            val responseCode = connection.responseCode
 
+                            if (responseCode == 200) {
+                                val response =
+                                    connection.inputStream.bufferedReader().use { it.readText() }
+                                displayUsername = response
+                                generalLoadingState = false
+                                withContext(Dispatchers.Main) {
+                                    onSuccess()
+                                }
+
+
+                            } else {
+                                generalLoadingState = false
+                                generalErrorMessage = connection.responseMessage
+                                Log.d("MainActivity", "Could not get username")
+                            }
                         } else {
                             generalLoadingState = false
-                            generalErrorMessage = connection.responseMessage
-                            Log.d("MainActivity", "Could not get username")
                         }
-                    } else {
+                    } catch (e: Exception) {
                         generalLoadingState = false
+                        Log.e("MainActivity", e.printStackTrace().toString())
                     }
-                } catch (e: Exception) {
-                    generalLoadingState = false
-                    Log.e("MainActivity", e.printStackTrace().toString())
                 }
             }.start()
 
