@@ -198,7 +198,7 @@ class DeviceWidget : GlanceAppWidget() {
                             Text(
                                 text = device.name,
                                 style = TextStyle(fontSize = 9.sp, color = deviceFontColor, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium),
-                                maxLines = 2
+                                maxLines = 1
                             )
                         }
                     }
