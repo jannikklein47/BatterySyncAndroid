@@ -26,6 +26,8 @@ data class BatteryDevice(
     val name: String,
     val level: Int,
     val iconRes: Int,
+    val chargingStatus: Boolean,
+    val isPluggedIn: Boolean
 )
 
 class DeviceWidget : GlanceAppWidget() {
@@ -62,8 +64,10 @@ class DeviceWidget : GlanceAppWidget() {
                             name = obj.getString("name"),
                             level = (obj.getDouble("battery") * 100f).toInt(),
                             // Map the icon based on your logic or a string from JSON
-                            iconRes = if (obj.getString("name").contains("MacBook"))
-                                R.drawable.ic_laptop else R.drawable.ic_phone
+                            iconRes = if (obj.getString("type").contains("laptop"))
+                                R.drawable.ic_laptop else R.drawable.ic_phone,
+                            chargingStatus = obj.getBoolean("chargingStatus"),
+                            isPluggedIn = obj.getBoolean("isPluggedIn")
                         )
                     )
                 }
@@ -90,7 +94,7 @@ class DeviceWidget : GlanceAppWidget() {
 
     }
 
-    fun createBatteryBitmap(context: Context, level: Int): Bitmap {
+    fun createBatteryBitmap(context: Context, level: Int, chargingStatus: Boolean, isPluggedIn: Boolean): Bitmap {
         val size = 180 // px
         // Ensure you use Bitmap.createBitmap with a Config
         val bitmap = createBitmap(size, size)
@@ -119,14 +123,16 @@ class DeviceWidget : GlanceAppWidget() {
         canvas.drawArc(left, top, right, bottom, 145f, 250f, false, paint)
 
         // Draw progress arc
-        paint.color = getBatteryColor(level) // Ensure this returns an Int
+        paint.color = getBatteryColor(level, chargingStatus, isPluggedIn) // Ensure this returns an Int
         val sweepAngle = (level / 100f) * 250f
         canvas.drawArc(left, top, right, bottom, 145f, sweepAngle, false, paint)
 
         return bitmap
     }
 
-    fun getBatteryColor(level: Int): Int {
+    fun getBatteryColor(level: Int, chargingStatus: Boolean, isPluggedIn: Boolean): Int {
+        if (chargingStatus) return (0xFF006EFF).toInt()
+        if (isPluggedIn) return (0xFF568bd1).toInt()
         return when {
             level > 30 -> (0xFF009900).toInt()
             level > 15 -> (0xFFEECC00).toInt()
@@ -170,7 +176,7 @@ class DeviceWidget : GlanceAppWidget() {
                         // For the ring, Glance supports CircularProgressIndicator
                         Box(contentAlignment = Alignment.Center, modifier = GlanceModifier.padding(bottom = 20.dp).fillMaxSize()) {
                             Image(
-                                provider = ImageProvider(createBatteryBitmap(context, device.level)),
+                                provider = ImageProvider(createBatteryBitmap(context, device.level, device.chargingStatus, device.isPluggedIn)),
                                 contentDescription = null,
                                 modifier = GlanceModifier.size(56.dp)
                             )
