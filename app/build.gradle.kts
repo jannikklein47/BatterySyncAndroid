@@ -64,5 +64,6 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
     implementation("androidx.navigation:navigation-compose:2.8.0")
-
+    implementation("androidx.glance:glance-appwidget:1.1.1") // Use the latest stable version
+    implementation("androidx.glance:glance-material3:1.1.1")
 }

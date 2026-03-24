@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout android:layout_width="56dp"
+    android:layout_height="56dp"
+    xmlns:android="http://schemas.android.com/apk/res/android">
+    <ProgressBar
+        android:id="@+id/progress_bg"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:indeterminate="false"
+        android:max="100"
+        android:progressDrawable="@drawable/battery_ring_background" />
+    <ProgressBar
+        android:id="@+id/progress_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:indeterminate="false"
+        android:max="100"
+        android:progressDrawable="@drawable/battery_ring_progress" />
+</FrameLayout>

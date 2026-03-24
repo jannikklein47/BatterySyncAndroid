@@ -27,6 +27,8 @@ import android.content.Intent
 import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
+import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.updateAll
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 
@@ -114,7 +116,7 @@ class BatteryService : Service() {
                     startTimer()
                 }
             }
-        }, 10000)
+        }, 50000)
     }
 
     fun startNotificationTimer() {
@@ -257,13 +259,17 @@ class BatteryService : Service() {
     }
 
 
-    fun notifyWidgets(context: Context) {
+    suspend fun notifyWidgets(context: Context) {
         val manager = AppWidgetManager.getInstance(context)
         val widgetIds = manager.getAppWidgetIds(ComponentName(context, BatteryWidget::class.java))
         for (widgetId in widgetIds) {
             Log.d("BatteryService", "Update Widget $widgetId")
             BatteryWidget.updateWidget(context, manager, widgetId)
         }
+
+        Log.d("BatteryService", "update new widget")
+        DeviceWidget().updateAll(context)
+
     }
 
     fun sendNotification(context: Context, title: String, message: String, loud: Boolean) {
