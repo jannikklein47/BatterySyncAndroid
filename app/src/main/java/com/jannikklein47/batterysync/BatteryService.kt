@@ -299,10 +299,12 @@ class BatteryService : Service() {
         val builder = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(R.drawable.ic_stat_name)
             .setContentTitle(title)
-            .setContentText(message)
+            .setContentText(message) // This is what shows when collapsed
+            // --- THIS IS THE FIX ---
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText(message)) // This shows when expanded
+            // -----------------------
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .setContentIntent(pendingIntent)
 
         // 3️⃣ Check permission (Android 13+)
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
