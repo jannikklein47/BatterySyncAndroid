@@ -20,6 +20,8 @@ import androidx.glance.text.*
 import androidx.glance.unit.ColorProvider
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
+import androidx.glance.action.actionStartActivity
+import androidx.glance.action.clickable
 import org.json.JSONArray
 
 data class BatteryDevice(
@@ -164,7 +166,8 @@ class DeviceWidget : GlanceAppWidget() {
                 .padding(8.dp)
                 .background(
                     dynamicBackground,
-                ),
+                )
+                .clickable(actionStartActivity<MainActivity>()),
             verticalAlignment = Alignment.CenterVertically
         ) {
             visibleDevices.forEach { device ->
