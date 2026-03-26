@@ -1,5 +1,5 @@
 package com.jannikklein47.batterysync
 
 class Globals {
-    public val BUILD = "2026032502"
+    public val BUILD = "2026032601"
 }
