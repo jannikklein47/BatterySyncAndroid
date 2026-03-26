@@ -12,6 +12,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.SpanStyle
@@ -47,10 +48,14 @@ class HomeScreen {
         var renamePopup by remember { mutableStateOf(false) }
         var logoutPopup by remember { mutableStateOf(false) }
 
+        // Define if ANY popup is showing
+        val isPopupVisible = renamePopup || logoutPopup || loadingState
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
+                .blur(if (isPopupVisible) 5.dp else 0.dp)
         ) {
 
             PullToRefreshBox(
@@ -79,7 +84,7 @@ class HomeScreen {
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                             .background(
-                                color = Color(0xFF0F1A1A).copy(alpha = 0.85f),
+                                color = Color(0xF01C1C1E).copy(alpha = 0.85f),
                                 shape = RoundedCornerShape(24.dp)
                             )
                             .padding(24.dp)
@@ -216,7 +221,7 @@ class HomeScreen {
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                             .background(
-                                color = Color(0xFF0F1A1A).copy(alpha = 0.85f),
+                                color = Color(0xF01C1C1E).copy(alpha = 0.85f),
                                 shape = RoundedCornerShape(24.dp)
                             )
                             .padding(24.dp)
@@ -293,7 +298,7 @@ class HomeScreen {
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                             .background(
-                                color = Color(0xFF0F1A1A).copy(alpha = 0.85f),
+                                color = Color(0xF01C1C1E).copy(alpha = 0.85f),
                                 shape = RoundedCornerShape(24.dp)
                             )
                             .padding(24.dp)
@@ -392,255 +397,28 @@ class HomeScreen {
         }
 
         if (renamePopup) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .clickable { renamePopup = false }
-                    .padding(24.dp),
-
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .background(Color(0xFF0F1A1A), RoundedCornerShape(20.dp))
-                        .padding(40.dp)
-                ) {
-                    Text(
-                        text = "Vergib einen neuen Namen",
-                        color = Color.White
-                    )
-                    Spacer(modifier = Modifier.height(20.dp))
-                    OutlinedTextField(
-                        value = newNameInput,
-                        onValueChange = { newNameInput = it },
-                        label = { Text("Neuer Name", color = Color.LightGray) },
-                        singleLine = true,
-                        enabled =  !loadingState,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = blue,
-                            unfocusedBorderColor = Color.DarkGray,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    Button(
-                        onClick = {
-                            renameDevice(newNameInput) {
-                                renamePopup = false
-                            }
-                        },
-                        enabled = !loadingState,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    Color.Gray,
-                                    shape = RoundedCornerShape(12.dp)
-                                ),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Text(
-                                text = "Bestätigen",
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
-                            )
-                        }
-                    }
-                }
-            }
+            RenameDeviceDialog(
+                initialName = newNameInput,
+                onDismiss = { renamePopup = false },
+                onConfirm = { name -> renameDevice(name) { renamePopup = false } },
+                loading = loadingState
+            )
         }
 
         if (logoutPopup) {
-            if (isRegistered) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .clickable { logoutPopup = false }
-                        .padding(24.dp),
-
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .background(Color(0xFF0F1A1A), RoundedCornerShape(20.dp))
-                            .padding(40.dp)
-                    ) {
-                        Text(
-                            text = "Möchtest du dich wirklich abmelden?",
-                            color = Color.White,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Text(
-                            text = "Wenn du dich abmeldest, wird die Verknüpfung zu diesem Gerät aufgehoben. Du kannst dein Gerät entweder löschen, oder inaktiv setzen und später neu verknüpfen.",
-                            color = Color.White
-                        )
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-
-                        Button(
-                            onClick = {
-                                logout(false)
-                            },
-                            enabled = !loadingState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(72.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Color.Gray,
-                                        shape = RoundedCornerShape(12.dp)
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = "Abmelden und als\ninaktiv markieren",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        }
-
-                        Button(
-                            onClick = {
-                                logout(true)
-                            },
-                            enabled = !loadingState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(72.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Color.Red,
-                                        shape = RoundedCornerShape(12.dp)
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = "Abmelden und löschen",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        }
-                    }
+            LogoutDialog(
+                isRegistered = isRegistered,
+                loading = loadingState,
+                onDismiss = { logoutPopup = false },
+                onLogout = { delete ->
+                    logout(delete)
+                    logoutPopup = false // Close after action
                 }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.6f))
-                        .clickable { logoutPopup = false }
-                        .padding(24.dp),
-
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier
-                            .background(Color(0xFF0F1A1A), RoundedCornerShape(20.dp))
-                            .padding(40.dp)
-                    ) {
-                        Text(
-                            text = "Möchtest du dich wirklich abmelden?",
-                            color = Color.White,
-                            fontSize = 20.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        Spacer(modifier = Modifier.height(20.dp))
-
-
-                        Button(
-                            onClick = {
-                                logout(false)
-                            },
-                            enabled = !loadingState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(72.dp),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(
-                                        Color.Gray,
-                                        shape = RoundedCornerShape(12.dp)
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = "Jetzt abmelden",
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 16.sp
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
+            )
         }
 
-
         if (loadingState) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier
-                        .background(Color(0xFF0F1A1A), RoundedCornerShape(20.dp))
-                        .padding(40.dp)
-                ) {
-                    CircularProgressIndicator(color = green)
-                    Spacer(modifier = Modifier.height(20.dp))
-                    Text(
-                        text = registerDeviceProgress,
-                        color = Color.White,
-                        fontSize = 18.sp
-                    )
-                }
-            }
+            LoadingDialog(message = registerDeviceProgress)
         }
 
 
