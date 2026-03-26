@@ -24,6 +24,7 @@ import java.util.Timer
 import java.util.TimerTask
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
@@ -31,6 +32,7 @@ import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.updateAll
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
+import androidx.core.net.toUri
 
 class BatteryService : Service() {
     private lateinit var batteryReceiver: BatteryStatusReceiver
@@ -48,14 +50,18 @@ class BatteryService : Service() {
         val content: String,
         val title: String,
         val type: String,
+        val url: String
     )
 
     companion object {
         var isRunning = false
     }
 
-    fun parseJson(json: String): List<DevicePrediction> {
-        return Json.decodeFromString(json)
+    fun parseJson(jsonString: String): List<DevicePrediction> {
+        val json = Json {
+            ignoreUnknownKeys = true
+        }
+        return json.decodeFromString(jsonString)
     }
 
     override fun onCreate() {
@@ -78,14 +84,13 @@ class BatteryService : Service() {
 
         startForeground(1, notification)
 
-        // Timer starten (alle 30 Sekunden)
-        startTimer()
+        startTimer(10000)
         startNotificationTimer()
 
         isRunning = true
     }
 
-    fun startTimer() {
+    fun startTimer(interval: Long) {
         if (!startInfoNotificationSent) {
             //sendNotificationSafe(applicationContext, "BatterySync läuft", "Die App wird dich nun stets mit aktuellen Daten versorgen.", false)
             startInfoNotificationSent = true
@@ -94,12 +99,14 @@ class BatteryService : Service() {
         timer?.schedule(object: TimerTask() {
 
             override fun run() {
-                Log.d("BatteryService", "Timer execution")
                 val pm = applicationContext.getSystemService(Context.POWER_SERVICE) as PowerManager
 
                 val isInteractive = pm.isInteractive // true = Bildschirm ist an
 
+                var nextInterval: Long = 50000
+
                 if (isInteractive) {
+                    Log.d("BatteryService", "Timer execution long interval")
                     // Bildschirm ist an → Update ist sinnvoll
                     CoroutineScope(Dispatchers.IO).launch {
                         val token = DataStoreManager(applicationContext).getToken()
@@ -109,14 +116,18 @@ class BatteryService : Service() {
                         } else if (!token.isNullOrEmpty()) {
                             getDevicesInfo(token)
                         }
+                        nextInterval = 50000
                     }
+                } else {
+                    Log.d("BatteryService", "Timer executing Shorter timer interval set")
+                    nextInterval = 10000
                 }
 
                 if (!timerStop) {
-                    startTimer()
+                    startTimer(nextInterval)
                 }
             }
-        }, 50000)
+        }, interval)
     }
 
     fun startNotificationTimer() {
@@ -174,10 +185,10 @@ class BatteryService : Service() {
 
                     for (noti in notifications) {
                         if (noti.type.uppercase() == "CONTENT") {
-                            sendNotificationSafe(applicationContext, noti.title, noti.content, true)
+                            sendNotificationSafe(applicationContext, noti.title, noti.content, true, noti.url)
 
                         } else {
-                            sendNotificationSafe(applicationContext, "Lade dein ${noti.targetName} auf!", "Dein Gerät wird in weniger als 2 Stunden leer sein. Lade es auf, damit es nicht aus geht.", true)
+                            sendNotificationSafe(applicationContext, "Lade dein ${noti.targetName} auf!", "Dein Gerät wird in weniger als 2 Stunden leer sein. Lade es auf, damit es nicht aus geht.", true, noti.url)
 
                         }
                     }
@@ -272,7 +283,7 @@ class BatteryService : Service() {
 
     }
 
-    fun sendNotification(context: Context, title: String, message: String, loud: Boolean) {
+    fun sendNotification(context: Context, title: String, message: String, loud: Boolean, link: String) {
         var channelId = "notiChannel"
         if (loud) channelId = "notiChannelLoud"
 
@@ -286,25 +297,46 @@ class BatteryService : Service() {
         val manager = context.getSystemService(NotificationManager::class.java)
         manager.createNotificationChannel(channel)
 
+        var builder: NotificationCompat.Builder
 
-        // 2️⃣ Build the notification
-        val intent = Intent(context, context::class.java) // Opens the same activity
-        val pendingIntent = PendingIntent.getActivity(
-            context,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE
-        )
+        if (link.isEmpty()){
+            // 2️⃣ Build the notification
 
-        val builder = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.drawable.ic_stat_name)
-            .setContentTitle(title)
-            .setContentText(message) // This is what shows when collapsed
-            // --- THIS IS THE FIX ---
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText(message)) // This shows when expanded
-            // -----------------------
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            builder = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_stat_name)
+                .setContentTitle(title)
+                .setContentText(message) // This is what shows when collapsed
+                // --- THIS IS THE FIX ---
+                .setStyle(NotificationCompat.BigTextStyle()
+                    .bigText(message)) // This shows when expanded
+                // -----------------------
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+        } else {
+            // 2️⃣ Build the notification
+            val browserIntent = Intent(Intent.ACTION_VIEW, link.toUri())
+
+            // 2. Wrap it in a PendingIntent
+            val pendingIntent = PendingIntent.getActivity(
+                context,
+                0, // Request code
+                browserIntent,
+                // Use IMMUTABLE for security on Android 12+
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+
+            builder = NotificationCompat.Builder(context, channelId)
+                .setSmallIcon(R.drawable.ic_stat_name)
+                .setContentTitle(title)
+                .setContentText(message) // This is what shows when collapsed
+                // --- THIS IS THE FIX ---
+                .setStyle(NotificationCompat.BigTextStyle()
+                    .bigText(message)) // This shows when expanded
+                // -----------------------
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+                .setAutoCancel(true)
+                .setContentIntent(pendingIntent)
+        }
 
         // 3️⃣ Check permission (Android 13+)
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
@@ -328,10 +360,10 @@ class BatteryService : Service() {
         NotificationManagerCompat.from(context).notify(System.currentTimeMillis().toInt(), builder.build())
     }
 
-    fun sendNotificationSafe(context: Context, title: String, message: String, loud: Boolean) {
+    fun sendNotificationSafe(context: Context, title: String, message: String, loud: Boolean, link: String) {
         val mainHandler = Handler(Looper.getMainLooper())
         mainHandler.post {
-            sendNotification(context, title, message, loud) // the function we wrote before
+            sendNotification(context, title, message, loud, link) // the function we wrote before
         }
     }
 

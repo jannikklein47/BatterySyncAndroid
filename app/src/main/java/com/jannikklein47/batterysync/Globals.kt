@@ -1,5 +1,5 @@
 package com.jannikklein47.batterysync
 
 class Globals {
-    public var IPADDRESS = "192.168.0.119"
+    public val BUILD = "2026032502"
 }

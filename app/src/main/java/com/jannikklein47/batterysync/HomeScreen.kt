@@ -36,7 +36,7 @@ class HomeScreen {
 
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
-    fun display(username: String, isRegistered: Boolean, currentDeviceName: String?, currentUuid: String?, loadingState: Boolean, errorMessage: String?, deviceList: List<MainActivity.Device>, isRefreshing: Boolean, foregroundServiceIsRunning: Boolean, onOpenReplaceOld: () -> Unit, registerDevice: () -> Unit, logout: (delete: Boolean) -> Unit, renameDevice: (name: String, success: () -> Unit) -> Unit, onRefresh: () -> Unit, startForegroundService: () -> Unit, openWebsite: () -> Unit) {
+    fun display(username: String, isRegistered: Boolean, currentDeviceName: String?, currentUuid: String?, loadingState: Boolean, errorMessage: String?, deviceList: List<MainActivity.Device>, isRefreshing: Boolean, foregroundServiceIsRunning: Boolean, onOpenReplaceOld: () -> Unit, registerDevice: () -> Unit, logout: (delete: Boolean) -> Unit, renameDevice: (name: String, success: () -> Unit) -> Unit, onRefresh: () -> Unit, startForegroundService: () -> Unit, openWebsite: () -> Unit, openDevice: (id: Int) -> Unit) {
         val green = Color(0xFF7CDE89)
         val teal = Color(0xFF28B0A5)
         val blue = Color(0xFF3E73B8)
@@ -239,6 +239,9 @@ class HomeScreen {
                                             RoundedCornerShape(16.dp)
                                         )
                                         .padding(20.dp)
+                                        .clickable {
+                                            openDevice(device.id)
+                                        }
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
@@ -374,9 +377,15 @@ class HomeScreen {
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Normal
                         )
+                        Text(
+                            text = "App-Version: (Build) ${Globals().BUILD}",
+                            color = Color.Gray,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Normal
+                        )
                     }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(36.dp))
 
                 }
             }

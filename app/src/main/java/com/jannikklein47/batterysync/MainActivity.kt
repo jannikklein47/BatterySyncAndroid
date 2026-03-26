@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.navigation.NavOptions
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -63,6 +64,11 @@ class MainActivity : ComponentActivity() {
 
         fun openWebsite() {
             val browserIntent = Intent(Intent.ACTION_VIEW, "https://batterysync.de".toUri());
+            startActivity(browserIntent);
+        }
+
+        fun openDevice(id: Int) {
+            val browserIntent = Intent(Intent.ACTION_VIEW, "https://batterysync.de/devices?id=$id".toUri());
             startActivity(browserIntent);
         }
 
@@ -325,7 +331,8 @@ class MainActivity : ComponentActivity() {
                         uuid = dataStoreManager.getUuid()
                     }
                     if (!uuid.isNullOrEmpty()) {
-                        val url = URL("https://batterysync.de:3000/device/uuid?uuid=$uuid")
+                        val build = Globals().BUILD
+                        val url = URL("https://batterysync.de:3000/device/uuid?uuid=$uuid&build=$build")
                         val connection = url.openConnection() as HttpURLConnection
                         connection.requestMethod = "POST"
                         connection.connectTimeout = 5000
@@ -702,7 +709,9 @@ class MainActivity : ComponentActivity() {
                     getDeviceList()
                     foregroundInterval()
                     startDestination = "home"
-                    navController.navigate("home")
+                    navController.navigate("home") {
+                        popUpTo(0) // This clears the entire backstack
+                    }
                 })
 
             } else {
@@ -817,6 +826,8 @@ class MainActivity : ComponentActivity() {
                         foregroundServiceIsRunning = BatteryService.isRunning
                     }, openWebsite = {
                         openWebsite()
+                    }, openDevice = { id ->
+                        openDevice(id)
                     })
                 }
 
