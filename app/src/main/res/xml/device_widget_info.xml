@@ -11,4 +11,6 @@
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
     android:initialLayout="@layout/glance_default_loading_layout"
+    android:configure="com.jannikklein47.batterysync.WidgetConfigActivity"
+    android:widgetFeatures="reconfigurable"
     android:updatePeriodMillis="0" />

@@ -2,4 +2,15 @@
 <resources>
 
     <style name="Theme.BatterySync" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.WidgetConfig.Dialog" parent="Theme.Material3.DayNight.Dialog">
+        <item name="android:windowBackground">@android:color/transparent</item>
+
+        <item name="android:windowFrame">@null</item>
+
+        <item name="android:windowIsFloating">true</item>
+
+        <item name="android:windowNoTitle">true</item>
+
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
 </resources>

@@ -90,6 +90,10 @@ class BatteryService : Service() {
         isRunning = true
     }
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        return START_STICKY
+    }
+
     fun startTimer(interval: Long) {
         if (!startInfoNotificationSent) {
             //sendNotificationSafe(applicationContext, "BatterySync läuft", "Die App wird dich nun stets mit aktuellen Daten versorgen.", false)
@@ -271,16 +275,16 @@ class BatteryService : Service() {
 
 
     suspend fun notifyWidgets(context: Context) {
+        /*
         val manager = AppWidgetManager.getInstance(context)
         val widgetIds = manager.getAppWidgetIds(ComponentName(context, BatteryWidget::class.java))
         for (widgetId in widgetIds) {
             Log.d("BatteryService", "Update Widget $widgetId")
             BatteryWidget.updateWidget(context, manager, widgetId)
-        }
+        }*/
 
         Log.d("BatteryService", "update new widget")
         DeviceWidget().updateAll(context)
-
     }
 
     fun sendNotification(context: Context, title: String, message: String, loud: Boolean, link: String) {

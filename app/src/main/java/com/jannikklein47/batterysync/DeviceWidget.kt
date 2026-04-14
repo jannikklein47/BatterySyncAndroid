@@ -8,6 +8,7 @@ import android.util.Log
 import android.widget.RemoteViews
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.unit.dp
@@ -83,15 +84,14 @@ class DeviceWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
 
         Log.d("widget", "provide glance")
-        // 1. Fetch your raw data (DataStore is usually a Flow or suspend)
         val deviceInfoString = DataStoreManager(context).getAllDevices() ?: ""
 
-        // 2. Parse your JSON into your list of BatteryDevice objects
         val devices = parseDevicesFromJson(deviceInfoString)
 
-        // 3. Pass the parsed list to your content
+        val showPercentSymbol = DataStoreManager(context).getWidgetShowPercent()
+
         provideContent {
-            DeviceWidgetContent(devices, context)
+            DeviceWidgetContent(devices, showPercentSymbol, context)
         }
 
     }
@@ -143,10 +143,12 @@ class DeviceWidget : GlanceAppWidget() {
     }
 
     @Composable
-    private fun DeviceWidgetContent(devices: List<BatteryDevice>, context: Context) {
+    private fun DeviceWidgetContent(devices: List<BatteryDevice>, showPercentSymbol: Boolean, context: Context) {
 
         val size = LocalSize.current
         val width = size.width
+        val height = size.height
+        val scale = if (height < 100.dp) 0.8f else 1.0f
 
         // Map width (dp) to number of columns
         // 1x1 is usually < 100dp, 2x1 is ~150dp, 3x1 is ~220dp, 4x1 is > 280dp
@@ -192,12 +194,12 @@ class DeviceWidget : GlanceAppWidget() {
                         }
 
                         Column(
-                            modifier = GlanceModifier.fillMaxSize().padding(top = 48.dp),
+                            modifier = GlanceModifier.fillMaxSize().padding(top = (48 * scale).toInt().dp),
                             verticalAlignment = Alignment.Top,
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
-                                text = "${device.level}%",
+                                text = "${device.level}${if (showPercentSymbol) "%" else ""}",
                                 style = TextStyle(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
@@ -210,6 +212,7 @@ class DeviceWidget : GlanceAppWidget() {
                                 maxLines = 1
                             )
                         }
+
                     }
                 }
             }

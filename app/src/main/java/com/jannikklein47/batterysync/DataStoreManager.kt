@@ -16,6 +16,8 @@ class DataStoreManager(private val context: Context) {
         private val NAME_KEY = stringPreferencesKey("name")
         private val DEVICES_KEY = stringPreferencesKey("devices")
         private val UUID_KEY = stringPreferencesKey("uuid")
+
+        private val WIDGET_SHOW_PERCENT_KEY = stringPreferencesKey("widget_show_percent")
     }
 
     suspend fun saveToken(token: String) {
@@ -91,5 +93,32 @@ class DataStoreManager(private val context: Context) {
             prefs[DEVICES_KEY] = json
         }
     }
+
+    suspend fun saveWidgetShowPercent(bool: Boolean) {
+        Log.d("DataStoreManager", "Update show percent in widget: $bool")
+
+        context.dataStore.edit { prefs ->
+            prefs[WIDGET_SHOW_PERCENT_KEY] = bool.toString()
+        }
+    }
+
+    suspend fun getWidgetShowPercent() : Boolean {
+        var result = context.dataStore.data
+            .map { prefs -> prefs[WIDGET_SHOW_PERCENT_KEY] }
+            .first()
+
+        if (result == null) {
+            saveWidgetShowPercent(true) // If there is no value set, the default should be true
+            result = "true"
+        }
+
+        Log.d("DataStoreManager", "Get widget show percent from store: $result")
+
+        Log.d("DataStoreManager", "Value: ${result}")
+
+        return result == true.toString()
+    }
+
+
 }
 
