@@ -154,18 +154,43 @@ class WidgetConfigActivity : ComponentActivity() {
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp)
+                            .padding(top = 8.dp)
                     ) {
-                        TextButton(onClick = {darkMode = null}) {
+                        TextButton(
+                            onClick = {darkMode = null},
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0x221E222B), disabledContainerColor = Color(0x111E222B)),
+                            modifier = Modifier.padding(end = 12.dp)
+                        ) {
                             Text("System", color = if (darkMode == null) Color.Black else Color.Gray)
                         }
-                        TextButton(onClick = {darkMode = false}) {
+                        TextButton(
+                            onClick = {darkMode = false},
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0x221E222B), disabledContainerColor = Color(0x111E222B)),
+                            modifier = Modifier.padding(end = 12.dp)
+                        ) {
                             Text(text = "Hell", color = if (darkMode == false) Color.Black else Color.Gray)
                         }
-                        TextButton(onClick = {darkMode = true}) {
+
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp)
+                    ) {
+                        TextButton(
+                            onClick = {darkMode = true},
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color(0x221E222B), disabledContainerColor = Color(0x111E222B)),
+                            modifier = Modifier.padding(end = 12.dp)
+                        ) {
                             Text(text = "Dunkel", color = if (darkMode == true) Color.Black else Color.Gray)
                         }
+
                     }
+
+
+
 
                     Row(
                         verticalAlignment = Alignment.CenterVertically,

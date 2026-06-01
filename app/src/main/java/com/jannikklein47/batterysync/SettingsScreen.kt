@@ -75,7 +75,7 @@ fun SettingsScreen(initialShowPercent: Boolean, initialAlwaysFirst: Boolean, ini
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            if (!currentDeviceName.isNullOrEmpty() && registrationStatus)
+            if (!currentDeviceName.isNullOrEmpty() && (registrationStatus || offline))
                 ChangeDeviceNameSetting(
                     currentDeviceName,
                     offline,
@@ -130,7 +130,7 @@ fun SettingsScreen(initialShowPercent: Boolean, initialAlwaysFirst: Boolean, ini
                 modifier = Modifier
                     .fillMaxWidth()
             ) {
-                Text(text = "Widget-Design", color = Color.White)
+                Text(text = "Widget-Design", color = Color.Gray)
             }
 
             Row(
@@ -139,13 +139,24 @@ fun SettingsScreen(initialShowPercent: Boolean, initialAlwaysFirst: Boolean, ini
                     .fillMaxWidth()
                     .padding(vertical = 8.dp)
             ) {
-                TextButton(onClick = {darkMode = null}) {
+                TextButton(
+                    onClick = {darkMode = null},
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E222B), disabledContainerColor = Color(0x881E222B)),
+                    modifier = Modifier.padding(end = 12.dp)
+                ) {
                     Text("System", color = if (darkMode == null) Color.White else Color.Gray)
                 }
-                TextButton(onClick = {darkMode = false}) {
+                TextButton(
+                    onClick = {darkMode = false},
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E222B), disabledContainerColor = Color(0x881E222B)),
+                    modifier = Modifier.padding(end = 12.dp)
+                ) {
                     Text(text = "Hell", color = if (darkMode == false) Color.White else Color.Gray)
                 }
-                TextButton(onClick = {darkMode = true}) {
+                TextButton(
+                    onClick = {darkMode = true},
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1E222B), disabledContainerColor = Color(0x881E222B)),
+                ) {
                     Text(text = "Dunkel", color = if (darkMode == true) Color.White else Color.Gray)
                 }
             }
@@ -157,7 +168,7 @@ fun SettingsScreen(initialShowPercent: Boolean, initialAlwaysFirst: Boolean, ini
                 modifier = Modifier
                     .fillMaxWidth()
             ) {
-                Text(text = "Widget-Transparenz: ${(transparency * 100).toInt()}%", color = Color.White)
+                Text(text = "Widget-Transparenz: ${(transparency * 100).toInt()}%", color = Color.Gray)
             }
 
             Row(
@@ -193,7 +204,7 @@ fun SettingsScreen(initialShowPercent: Boolean, initialAlwaysFirst: Boolean, ini
 
             Text(
                 text = "Hinweis: Es kann eine Weile dauern, bis das Widget sich an die neuen Einstellungen anpasst, um Energie zu sparen.",
-                style = MaterialTheme.typography.bodySmall, color = Color.Gray
+                style = MaterialTheme.typography.bodySmall, color = Color.Gray, fontWeight = FontWeight.Light
             )
 
             Spacer(modifier = Modifier.height(24.dp))

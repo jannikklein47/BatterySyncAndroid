@@ -374,59 +374,70 @@ class BatteryService : Service() {
     }
 
     fun different(string1: String, string2: String): Boolean {
-        val json1 = JSONArray(string1)
-        val json2 = JSONArray(string2)
+        try {
+            val json1 = JSONArray(string1)
+            val json2 = JSONArray(string2)
 
-        if (json1.length() != json2.length()) return true
+            if (json1.length() != json2.length()) return true
 
-        for (i in 0 until json1.length()) {
-            val j1 = json1.getJSONObject(i)
-            val j2 = json2.getJSONObject(i)
+            for (i in 0 until json1.length()) {
+                val j1 = json1.getJSONObject(i)
+                val j2 = json2.getJSONObject(i)
 
-            if (j1.getString("name") != j2.getString("name")) return true
-            if ((j1.getDouble("battery" ) * 100f).toInt() !=  (j2.getDouble("battery")*100f).toInt()) return true
-            if (j1.getBoolean("chargingStatus") != j2.getBoolean("chargingStatus")) return true
-            if (j1.getBoolean("isPluggedIn") != j2.getBoolean("isPluggedIn")) return true
+                if (j1.getString("name") != j2.getString("name")) return true
+                if ((j1.getDouble("battery" ) * 100f).toInt() !=  (j2.getDouble("battery")*100f).toInt()) return true
+                if (j1.getBoolean("chargingStatus") != j2.getBoolean("chargingStatus")) return true
+                if (j1.getBoolean("isPluggedIn") != j2.getBoolean("isPluggedIn")) return true
+            }
+
+            return false
+        } catch (e: Exception) {
+            Log.e("BatteryService", "Error occured in different: $e, ${e.printStackTrace()}")
+            return true
         }
-
-        return false
     }
 
     suspend fun batteryStatusChanged(): Boolean {
 
         val lastStatusString = DataStoreManager(applicationContext).getLastLocalBatteryStatus()
-        if (lastStatusString == "{}") {
+        if (lastStatusString == "{}" || lastStatusString.isEmpty()) {
             Log.d("BatteryService", "No local battery state available")
             return false
         }
-        val lastStatus = JSONObject(lastStatusString)
+        try {
+            val lastStatus = JSONObject(lastStatusString)
 
-        val batteryStatus: Intent? = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { ifilter ->
-            applicationContext.registerReceiver(null, ifilter)
+            val batteryStatus: Intent? = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { ifilter ->
+                applicationContext.registerReceiver(null, ifilter)
+            }
+
+            if (batteryStatus != null) {
+                val level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+                val batteryPct = (level / scale.toDouble())
+
+                val status = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+                val isCharging: Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING
+
+                val chargePlug = batteryStatus.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
+                val isPluggedIn = chargePlug == BatteryManager.BATTERY_PLUGGED_AC ||
+                        chargePlug == BatteryManager.BATTERY_PLUGGED_USB ||
+                        chargePlug == BatteryManager.BATTERY_PLUGGED_WIRELESS
+
+                // Only save the latest state after checking
+                DataStoreManager(applicationContext).saveLatestLocalBatteryStatus("{battery:${batteryPct},chargingStatus:${isCharging},isPluggedIn:${isPluggedIn}}")
+
+                if (lastStatus.getDouble("battery") != batteryPct) return true
+                if (lastStatus.getBoolean("chargingStatus") != isCharging) return true
+                if (lastStatus.getBoolean("isPluggedIn") != isPluggedIn) return true
+            }
+
+            return false
+        } catch (e: Exception) {
+            Log.e("BatteryService", "Error while trying to check if the battery status changed: $e, ${e.printStackTrace()}")
+            return false
         }
 
-        if (batteryStatus != null) {
-            val level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-            val scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-            val batteryPct = (level / scale.toDouble())
-
-            val status = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-            val isCharging: Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING
-
-            val chargePlug = batteryStatus.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
-            val isPluggedIn = chargePlug == BatteryManager.BATTERY_PLUGGED_AC ||
-                    chargePlug == BatteryManager.BATTERY_PLUGGED_USB ||
-                    chargePlug == BatteryManager.BATTERY_PLUGGED_WIRELESS
-
-            // Only save the latest state after checking
-            DataStoreManager(applicationContext).saveLatestLocalBatteryStatus("{battery:${batteryPct},chargingStatus:${isCharging},isPluggedIn:${isPluggedIn}}")
-
-            if (lastStatus.getDouble("battery") != batteryPct) return true
-            if (lastStatus.getBoolean("chargingStatus") != isCharging) return true
-            if (lastStatus.getBoolean("isPluggedIn") != isPluggedIn) return true
-        }
-
-        return false
     }
 
 

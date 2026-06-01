@@ -32,6 +32,7 @@ import java.net.URL
 import java.time.Instant
 import java.util.Timer
 import java.util.TimerTask
+import kotlinx.coroutines.*
 
 
 fun request(method: String, url: String, token: String?, onFinish: (statusCode: Int, response: String) -> Unit) {
@@ -486,7 +487,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-
         fun renameDevice(name: String, callback: (Boolean) -> Unit) {
             val store = DataStoreManager(applicationContext)
             CoroutineScope(Dispatchers.IO).launch {
@@ -526,7 +526,6 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-
         fun getDeviceHistory(id: Int, callback: (BatteryHistory?) -> Unit) {
             val store = DataStoreManager(applicationContext)
             CoroutineScope(Dispatchers.IO).launch {
@@ -558,7 +557,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val navController = rememberNavController()
-            var startDestination = "login"
+            var startDestination = "loading"
 
             if (!token.isNullOrEmpty()) {
                 // The user has logged in once, as this token can only be saved by a
@@ -572,33 +571,42 @@ class MainActivity : ComponentActivity() {
                 //        - The user is directed to the home page, with offline notice.
                 //          Some features are disabled.
 
-                checkLogin(
-                    success = {
-                        Log.d("MainActivity", "Logged in")
-                        startDestination = "home"
-                        loadAllData(onSuccess = {
-                            Log.d("MainActivity", "Loaded data")
+                Log.d("MainActivity", "Internet: ${isInternetAvailable(applicationContext)}")
+
+                if (isInternetAvailable(applicationContext)) {
+                    checkLogin(
+                        success = {
+                            Log.d("MainActivity", "Logged in")
+                            startDestination = "home"
+                            loadAllData(onSuccess = {
+                                Log.d("MainActivity", "Loaded data")
+                                foregroundInterval()
+                                navController.navigate("home") {
+                                    popUpTo(0)
+                                }
+                            })
+                        },
+                        offline = {
+                            Log.d("MainActivity", "Offline")
+                            startDestination = "home"
+                            offline = true
+                            loadOffline()
                             foregroundInterval()
                             navController.navigate("home") {
                                 popUpTo(0)
                             }
-                        })
-                    },
-                    offline = {
-                        Log.d("MainActivity", "Offline")
-                        startDestination = "home"
-                        offline = true
-                        loadOffline()
-                        foregroundInterval()
-                        navController.navigate("home") {
-                            popUpTo(0)
+                        },
+                        fail = {
+                            //
                         }
-                    },
-                    fail = {
-                        //
-                    }
-                )
-
+                    )
+                } else {
+                    Log.d("MainActivity", "Offline")
+                    startDestination = "home"
+                    offline = true
+                    loadOffline()
+                    foregroundInterval()
+                }
             }
 
             NavHost(
@@ -634,6 +642,9 @@ class MainActivity : ComponentActivity() {
                     )
                 }
             ) {
+                composable("loading") {
+                    LoadingScreen()
+                }
                 composable("login") {
                     WelcomeScreen().display(
                         generalErrorMessage,

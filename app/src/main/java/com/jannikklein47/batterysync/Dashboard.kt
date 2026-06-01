@@ -277,11 +277,11 @@ fun DeviceCard(device: MainActivity.Device, offline: Boolean, fetchBatteryHistor
     val view = LocalView.current
 
     LaunchedEffect(isExpanded) {
+        if (isExpanded) view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
         if (isExpanded && (history.day.isEmpty() || history.week.isEmpty())) {
             isLoadingHistory = true
             fetchBatteryHistory(device.id) { result ->
                 if (result != null) history = result
-                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                 Log.d("Dashboard", "Haptic Feedback")
                 isLoadingHistory = false
             }
