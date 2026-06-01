@@ -30,6 +30,7 @@ class BatteryStatusReceiver : BroadcastReceiver() {
 
         Log.d("BatteryReceiver", "Akkustand: $batteryPct")
 
+
         CoroutineScope(Dispatchers.IO).launch {
             val token = DataStoreManager(context).getToken()
             val uuid = DataStoreManager(context).getUuid()

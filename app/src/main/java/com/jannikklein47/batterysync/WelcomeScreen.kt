@@ -30,6 +30,7 @@ class WelcomeScreen {
         val green = Color(0xFF7CDEB4)
         val teal = Color(0xFF28B0A5)
         val blue = Color(0xFF3E73B8)
+        val BackgroundDark = Color(0xFF0F1318)
 
         val gradient = Brush.horizontalGradient(
             colors = listOf(
@@ -47,7 +48,7 @@ class WelcomeScreen {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(BackgroundDark)
                 .padding(24.dp)
         ) {
             Column(
@@ -73,7 +74,7 @@ class WelcomeScreen {
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                             .background(
-                                color = Color(0xFF0F1A1A).copy(alpha = 0.85f),
+                                color = Color(0xFF1E222B),
                                 shape = RoundedCornerShape(24.dp)
                             )
                             .padding(24.dp)
@@ -201,7 +202,7 @@ class WelcomeScreen {
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                             .background(
-                                color = Color(0xFF0F1A1A).copy(alpha = 0.85f),
+                                color = Color(0xFF1E222B),
                                 shape = RoundedCornerShape(24.dp)
                             )
                             .padding(24.dp)

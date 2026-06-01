@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentHeight
@@ -28,6 +29,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,7 +38,10 @@ import androidx.compose.material3.TextField
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.glance.ButtonDefaults
+import androidx.glance.appwidget.CheckboxDefaults
 import androidx.glance.appwidget.updateAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,9 +65,15 @@ class WidgetConfigActivity : ComponentActivity() {
         }
 
         var initialShowPercent = true
+        var initialAlwaysFirst = true
+        var initialDarkMode: Boolean? = null
+        var initialTransparency = 0.94f
 
         CoroutineScope(Dispatchers.IO).launch {
             initialShowPercent = DataStoreManager(applicationContext).getWidgetShowPercent()
+            initialAlwaysFirst = DataStoreManager(applicationContext).getWidgetAlwaysFirst()
+            initialDarkMode = DataStoreManager(applicationContext).getWidgetDarkMode()
+            initialTransparency = DataStoreManager(applicationContext).getWidgetTransparency().toFloat() / 100f
         }
 
 
@@ -69,6 +81,9 @@ class WidgetConfigActivity : ComponentActivity() {
         setContent {
             // State to track the checkbox
             var showPercent by remember { mutableStateOf(initialShowPercent) }
+            var alwaysFirst by remember { mutableStateOf(initialAlwaysFirst) }
+            var darkMode by remember { mutableStateOf(initialDarkMode) }
+            var transparency by remember { mutableFloatStateOf(initialTransparency) }
 
                 // Surface provides the "Card" look with elevation and rounded corners
             Surface(
@@ -82,7 +97,7 @@ class WidgetConfigActivity : ComponentActivity() {
             ) {
                 Column(
                     modifier = Modifier.padding(24.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
                         text = "Widget Einstellungen",
@@ -98,14 +113,98 @@ class WidgetConfigActivity : ComponentActivity() {
                     ) {
                         Checkbox(
                             checked = showPercent,
-                            onCheckedChange = { showPercent = it }
+                            onCheckedChange = { showPercent = it },
+                            colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                checkedColor = Color(0xFF3B71CA), // Material Blue
+                                uncheckedColor = Color.Gray
+                            )
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(text = "%-Symbol nach Akkustand")
                     }
 
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { alwaysFirst = !alwaysFirst }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Checkbox(
+                            checked = alwaysFirst,
+                            onCheckedChange = { alwaysFirst = it },
+                            colors = androidx.compose.material3.CheckboxDefaults.colors(
+                                checkedColor = Color(0xFF3B71CA), // Material Blue
+                                uncheckedColor = Color.Gray
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = "Dieses Gerät immer als erstes zeigen")
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    ) {
+                        Text(text = "Widget-Design", color = Color.Black)
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                    ) {
+                        TextButton(onClick = {darkMode = null}) {
+                            Text("System", color = if (darkMode == null) Color.Black else Color.Gray)
+                        }
+                        TextButton(onClick = {darkMode = false}) {
+                            Text(text = "Hell", color = if (darkMode == false) Color.Black else Color.Gray)
+                        }
+                        TextButton(onClick = {darkMode = true}) {
+                            Text(text = "Dunkel", color = if (darkMode == true) Color.Black else Color.Gray)
+                        }
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    ) {
+                        Text(text = "Widget-Transparenz: ${(transparency * 100).toInt()}%", color = Color.Black)
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    ) {
+                        Slider(
+                            value = transparency,
+                            onValueChange = { value ->
+                                transparency = value
+                            },
+                            valueRange = 0f..1f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFF3B71CA),
+                                activeTrackColor = Color(0xFF3B71CA)
+                            )
+                        )
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    ) {
+                        TextButton(onClick = {transparency = 0.94f}) {
+                            Text("Zurücksetzen", color = Color.Gray)
+                        }
+                    }
+
                     Text(
-                        text = "Hinweis: Es kann bis zu 50 Sekunden dauern, bis das Widget sich an die neuen Einstellungen anpasst, um Energie zu sparen.",
+                        text = "Hinweis: Es kann eine Weile dauern, bis das Widget sich an die neuen Einstellungen anpasst, um Energie zu sparen.",
                         style = MaterialTheme.typography.bodySmall
                     )
 
@@ -115,10 +214,14 @@ class WidgetConfigActivity : ComponentActivity() {
                     ) {
                         // "Cancel" feel: Just finish without saving
                         TextButton(onClick = { finish() }) {
-                            Text("Abbrechen")
+                            Text("Abbrechen", color = Color(0xFF3B71CA))
                         }
                         Spacer(modifier = Modifier.width(8.dp))
-                        Button(onClick = { saveAndFinish(showPercent) }) {
+                        Button(
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF3B71CA)
+                            ),
+                            onClick = { saveAndFinish(showPercent, alwaysFirst, darkMode, transparency) }) {
                             Text("Speichern")
                         }
                     }
@@ -128,15 +231,18 @@ class WidgetConfigActivity : ComponentActivity() {
         }
     }
 
-    private fun saveAndFinish(showPercent: Boolean) {
+    private fun saveAndFinish(showPercent: Boolean, alwaysFirst: Boolean, darkMode: Boolean?, transparency: Float) {
         val context = this
         lifecycleScope.launch {
             // 3. Save your settings using GlanceStateDefinition (DataStore)
 
             DataStoreManager(context).saveWidgetShowPercent(showPercent)
+            DataStoreManager(context).saveWidgetAlwaysFirst(alwaysFirst)
+            DataStoreManager(context).saveWidgetDarkMode(darkMode)
+            DataStoreManager(context).saveWidgetTransparency((transparency * 100f).toInt())
 
             // 4. Update the widget immediately
-            DeviceWidget().updateAll(context)
+            notifyWidgets(context)
 
             // 5. Success! Tell the system to place the widget
             val resultValue = Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)

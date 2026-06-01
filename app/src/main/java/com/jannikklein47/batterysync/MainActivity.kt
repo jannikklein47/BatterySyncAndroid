@@ -11,11 +11,13 @@ import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.*
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
-import androidx.navigation.NavOptions
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -24,18 +26,43 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONException
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.time.Instant
 import java.util.Timer
 import java.util.TimerTask
 
 
+fun request(method: String, url: String, token: String?, onFinish: (statusCode: Int, response: String) -> Unit) {
+    Thread {
+        try {
+            val url = URL("https://batterysync.de:3000$url")
+            val connection = url.openConnection() as HttpURLConnection
+            connection.requestMethod = method
+            connection.connectTimeout = 5000
+            connection.readTimeout = 5000
+            connection.setRequestProperty("Content-Type", "application/json")
+            if (!token.isNullOrEmpty()) connection.setRequestProperty("Authorization", token)
+
+            val responseCode = connection.responseCode
+            var response: String = ""
+            if (responseCode < 400) response = connection.inputStream.bufferedReader().use { it.readText() }
+            else response = connection.errorStream.bufferedReader().use { it.readText() }
+            CoroutineScope(Dispatchers.Main).launch {
+                onFinish(responseCode, response)
+            }
+        } catch (e: Exception) {
+            Log.d("API Call", "Error with request: $e")
+            onFinish(0, "")
+        }
+    }.start()
+}
+
 class MainActivity : ComponentActivity() {
 
     // Simple data class
-    data class Device(val name: String, val requiresOtp: Boolean, val id: Int, val battery: Double)
+    data class Device(val name: String, val requiresOtp: Boolean, val id: Int, val battery: Double, val predictedZeroAt: String, val favorite: Boolean, val isPLuggedIn: Boolean, val chargingStatus: Boolean, val cycles: Int, val healthScore: Int, val healthyPercentCharged: Int)
 
     var timer: Timer = Timer()
 
@@ -47,20 +74,26 @@ class MainActivity : ComponentActivity() {
         val dataStoreManager = DataStoreManager(applicationContext)
 
         var token by mutableStateOf<String?>(null)
-        var uuid by mutableStateOf<String?>(null)
         CoroutineScope(Dispatchers.IO).launch {
             token = dataStoreManager.getToken()
-            uuid = dataStoreManager.getUuid()
         }
         var deviceListIsRefreshing by mutableStateOf(false)
         var generalLoadingState by mutableStateOf(false)
         var generalErrorMessage by mutableStateOf<String?>(null)
         var displayUsername by mutableStateOf("...")
-        var ownDisplayName by mutableStateOf<String?>(null)
         var registrationStatus by mutableStateOf(false)
         var selectedReplaceDeviceCanGenerateOtp by mutableStateOf<Boolean?>(null)
         var foregroundServiceIsRunning by mutableStateOf(BatteryService.isRunning)
         var otpInputWrong by mutableStateOf<Boolean?>(null)
+
+        var widgetShowPercent by mutableStateOf(true)
+        var widgetAlwaysFirst by mutableStateOf(true)
+        var widetDarkMode by mutableStateOf<Boolean?>(null)
+        var widgetTransparency by mutableFloatStateOf(0.94f)
+
+        var localId by mutableIntStateOf(0)
+        var localDeviceName by mutableStateOf("Dieses Gerät")
+        var offline by mutableStateOf(false)
 
         fun openWebsite() {
             val browserIntent = Intent(Intent.ACTION_VIEW, "https://batterysync.de".toUri());
@@ -72,614 +105,440 @@ class MainActivity : ComponentActivity() {
             startActivity(browserIntent);
         }
 
-        fun getDeviceList() {
-            Thread {
-                try {
-
+        fun checkLogin(success: () -> Unit, offline: () -> Unit, fail: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                if (token.isNullOrEmpty()) {
+                    fail()
+                }
+                request("GET", "/login/auth", token, onFinish = { code, res ->
+                    Log.d("MainActivity", "Login result: $code:$res")
                     CoroutineScope(Dispatchers.IO).launch {
-                        Log.d("MainActivity", "Get devices")
-                        try {
-                            val token = dataStoreManager.getToken()
-                            if (!token.isNullOrEmpty()) {
-                                val url = URL("https://batterysync.de:3000/device")
-                                val connection = url.openConnection() as HttpURLConnection
-                                connection.requestMethod = "GET"
-                                connection.connectTimeout = 5000
-                                connection.readTimeout = 5000
-                                connection.setRequestProperty("Content-Type","application/json")
-                                connection.setRequestProperty("Authorization", token)
-
-                                val responseCode = connection.responseCode
-
-                                if (responseCode == 200) {
-                                    val response = connection.inputStream.bufferedReader().use { it.readText() }
-                                    Log.d("MainActivity", response)
-                                    val deviceListJSON = JSONArray(response)
-
-                                    deviceList = listOf()
-                                    var i = 0
-                                    while (i < deviceListJSON.length()) {
-
-                                        try {
-                                            deviceList = deviceList.plus(
-                                                Device(
-                                                    deviceListJSON.getJSONObject(i).getString("name"),
-                                                    deviceListJSON.getJSONObject(i).getBoolean("requiresOtp"),
-                                                    deviceListJSON.getJSONObject(i).getInt("id"),
-                                                    deviceListJSON.getJSONObject(i).getDouble("battery")
-                                                    )
-                                            )
-
-                                        } catch (e: JSONException) {
-                                            deviceList = deviceList.plus(Device("JSON ERROR", true, -1, 0.0))
-                                        }
-
-
-                                        i = i + 1
-                                    }
-
-                                    deviceListIsRefreshing = false
-
-                                    Log.d("MainActivity", "Loaded devices")
-
-                                } else {
-                                    deviceListIsRefreshing = false
-                                    Log.d("MainActivity", "Error response")
-                                }
-                            } else {
-                                deviceListIsRefreshing = false
-                                Log.d("MainActivity", "not logged in")
-                                throw Error("Not logged in")
-                            }
-                        } catch (e: Exception) {
-                            deviceListIsRefreshing = false
-                            Log.e("ReplaceDevicesScreen", e.toString())
-                        }
-                    }
-
-                } catch (e: Exception) {
-                    deviceListIsRefreshing = false
-                    Log.e("MainActivity", e.toString())
-                }
-            }.start()
-        }
-        
-        fun login(username: String, password: String, onLoginSuccess:() -> Unit) {
-
-            Thread {
-                CoroutineScope(Dispatchers.IO).launch {
-
-                    generalLoadingState = true
-
-                    try {
-                        val url = URL("https://batterysync.de:3000/login?email=$username&password=$password")
-                        val connection = url.openConnection() as HttpURLConnection
-                        connection.requestMethod = "POST"
-                        connection.connectTimeout = 5000
-                        connection.readTimeout = 5000
-                        connection.setRequestProperty("Content-Type","application/json")
-
-                        val responseCode = connection.responseCode
-
-                        if (responseCode == 200) {
-                            val response = connection.inputStream.bufferedReader().use { it.readText() }
-
-                            // Save token in background
-                            dataStoreManager.saveToken(token = response)
-
-                            // Switch back to UI thread
+                        if (code == 200) {
+                            store.saveUserName(res)
+                            displayUsername = res
                             withContext(Dispatchers.Main) {
-                                generalLoadingState = false
-                                onLoginSuccess()
+                                success()
                             }
-
+                        } else if (code == 422) {
+                            displayUsername = res
+                            withContext(Dispatchers.Main) {
+                                fail()
+                            }
                         } else {
                             withContext(Dispatchers.Main) {
-                                generalLoadingState = false
-                                generalErrorMessage = connection.responseMessage
+                                offline()
                             }
                         }
-
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            generalLoadingState = false
-                            generalErrorMessage = e.message
-                        }
-                        Log.e("MainActivity", e.printStackTrace().toString())
                     }
-                }
-            }.start()
-            
-        }
-
-        fun logout(delete: Boolean, onSuccess: () -> Unit) {
-
-            Thread {
-                CoroutineScope(Dispatchers.IO).launch {
-
-                    token = dataStoreManager.getToken()
-                    uuid = dataStoreManager.getUuid()
-
-                    generalLoadingState = true
-
-                    try {
-                        val url = if (delete) URL("https://batterysync.de:3000/device/logout/delete?uuid=$uuid") else URL("https://batterysync.de:3000/device/logout/inactive?uuid=$uuid")
-                        val connection = url.openConnection() as HttpURLConnection
-                        connection.requestMethod = "POST"
-                        connection.connectTimeout = 5000
-                        connection.readTimeout = 5000
-                        connection.setRequestProperty("Content-Type","application/json")
-                        connection.setRequestProperty("Authorization",token)
-
-                        val responseCode = connection.responseCode
-
-                        if (responseCode == 200) {
-                            // Switch back to UI thread
-                            withContext(Dispatchers.Main) {
-                                generalLoadingState = false
-                                onSuccess()
-                            }
-
-                        } else {
-                            withContext(Dispatchers.Main) {
-                                generalLoadingState = false
-                                generalErrorMessage = connection.responseMessage
-                            }
-                        }
-
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            generalLoadingState = false
-                            generalErrorMessage = e.message
-                        }
-                        Log.e("MainActivity", e.printStackTrace().toString())
-                    }
-                }
-            }.start()
-        }
-
-        fun getUsername() {
-            Thread {
-                try {
-                    generalLoadingState = true
-                    CoroutineScope(Dispatchers.IO).launch {
-                        token = dataStoreManager.getToken()
-                    }
-                    if (!token.isNullOrEmpty()) {
-                        val url = URL("https://batterysync.de:3000/login/auth")
-                        val connection = url.openConnection() as HttpURLConnection
-                        connection.requestMethod = "GET"
-                        connection.connectTimeout = 5000
-                        connection.readTimeout = 5000
-                        connection.setRequestProperty("Content-Type","application/json")
-                        connection.setRequestProperty("Authorization", token)
-
-                        val responseCode = connection.responseCode
-
-                        if (responseCode == 200) {
-                            val response = connection.inputStream.bufferedReader().use { it.readText() }
-                            displayUsername = response
-                            generalLoadingState = false
-
-                        } else {
-                            generalLoadingState = false
-                            generalErrorMessage = connection.responseMessage
-                        }
-                    } else {
-                        generalLoadingState = false
-                    }
-                } catch (e: Exception) {
-                    generalLoadingState = false
-                    Log.e("MainActivity", e.printStackTrace().toString())
-                }
-            }.start()
-
-
-        }
-        fun getUsername(onSuccess: () -> Unit) {
-            Thread {
-                CoroutineScope(Dispatchers.IO).launch {
-                    try {
-                        generalLoadingState = true
-
-                        token = dataStoreManager.getToken()
-
-                        if (!token.isNullOrEmpty()) {
-                            val url = URL("https://batterysync.de:3000/login/auth")
-                            val connection = url.openConnection() as HttpURLConnection
-                            connection.requestMethod = "GET"
-                            connection.connectTimeout = 5000
-                            connection.readTimeout = 5000
-                            connection.setRequestProperty("Content-Type", "application/json")
-                            connection.setRequestProperty("Authorization", token)
-
-                            val responseCode = connection.responseCode
-
-                            if (responseCode == 200) {
-                                val response =
-                                    connection.inputStream.bufferedReader().use { it.readText() }
-                                displayUsername = response
-                                generalLoadingState = false
-                                withContext(Dispatchers.Main) {
-                                    onSuccess()
-                                }
-
-
-                            } else {
-                                generalLoadingState = false
-                                generalErrorMessage = connection.responseMessage
-                                Log.d("MainActivity", "Could not get username")
-                            }
-                        } else {
-                            generalLoadingState = false
-                        }
-                    } catch (e: Exception) {
-                        generalLoadingState = false
-                        Log.e("MainActivity", e.printStackTrace().toString())
-                    }
-                }
-            }.start()
-
-
-        }
-
-        fun checkRegistrationStatus() {
-            Thread {
-                try {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        token = dataStoreManager.getToken()
-                        uuid = dataStoreManager.getUuid()
-                    }
-                    if (!uuid.isNullOrEmpty()) {
-                        val build = Globals().BUILD
-                        val url = URL("https://batterysync.de:3000/device/uuid?uuid=$uuid&build=$build")
-                        val connection = url.openConnection() as HttpURLConnection
-                        connection.requestMethod = "POST"
-                        connection.connectTimeout = 5000
-                        connection.readTimeout = 5000
-                        connection.setRequestProperty("Content-Type","application/json")
-                        connection.setRequestProperty("Authorization", token)
-
-                        val secondResponseCode = connection.responseCode
-
-                        if (secondResponseCode == 200) {
-                            val response = connection.inputStream.bufferedReader().use { it.readText() }
-                            try {
-                                ownDisplayName = JSONObject(response).getString("name")
-                            } catch (e: Exception) {
-                                ownDisplayName = "_"
-                            }
-
-                            registrationStatus = true
-                            generalLoadingState = false
-                        }
-                    } else {
-                        registrationStatus = false
-                        generalLoadingState = false
-                    }
-                } catch (e: Exception) {
-                    generalLoadingState = false
-                    registrationStatus = false
-                    Log.e("MainActivity", e.printStackTrace().toString())
-                }
-            }.start()
-        }
-
-        // Duplicate to checkRegistrationStatus ???
-        fun getDisplayName(uuid: String) {
-            val secondUrl = URL("https://batterysync.de:3000/device/uuid?uuid=$uuid")
-            val secondConnection = secondUrl.openConnection() as HttpURLConnection
-            secondConnection.requestMethod = "POST"
-            secondConnection.connectTimeout = 5000
-            secondConnection.readTimeout = 5000
-            secondConnection.setRequestProperty("Content-Type","application/json")
-            secondConnection.setRequestProperty("Authorization", token)
-
-            secondConnection.connect()
-
-            val secondResponseCode = secondConnection.responseCode
-            if (secondResponseCode == 200) {
-                val secondResponse = secondConnection.inputStream.bufferedReader().use { it.readText() }
-
-                var name = ""
-                try {
-                    name = JSONObject(secondResponse).getString("name")
-                } catch (e: Exception) {
-                    name = "_"
-                }
-
-                ownDisplayName = name
-                registrationStatus = true
-                generalLoadingState = false
-
-                Log.d("MainActivity", "Matched identifiers: $ownDisplayName")
-
-
-            } else {
-                Log.d("MainActivity", "Failed to match identifiers")
-                generalLoadingState = false
+                })
             }
         }
 
-        fun registerDevice() {
+        fun parseBatteryHistory(data: String): BatteryHistory {
+            val obj = JSONObject(data)
+            val dayHistory = obj.getJSONArray("day")
+            val weekHistory = obj.getJSONArray("week")
 
-            Thread {
-                CoroutineScope(Dispatchers.IO).launch {
+            val history = BatteryHistory(day = emptyList(), week = emptyList())
+
+            for (i in 0..<dayHistory.length()) {
+                val element = dayHistory.getJSONArray(i)
+                val createdAt = Instant.ofEpochMilli(element.getLong(0))
+                val battery = element.getInt(1)
+                history.day = history.day.plus(BatteryHistoryEntry(createdAt, battery))
+            }
+
+            for (i in 0..<weekHistory.length()) {
+                val element = weekHistory.getJSONArray(i)
+                val createdAt = Instant.ofEpochMilli(element.getLong(0))
+                val battery = element.getInt(1)
+                history.week = history.week.plus(BatteryHistoryEntry(createdAt, battery))
+            }
+
+            history.day = history.day.reversed()
+            history.week = history.week.reversed()
+
+            return history
+        }
+
+        fun parseDeviceJSON(data: String) {
+            try {
+                val deviceListJSON = JSONArray(data)
+                deviceList = listOf()
+
+
+                Log.d("MainActivity", "Data to parse: $data")
+
+                for (i in 0..<deviceListJSON.length()) {
                     try {
-                        generalLoadingState = true
+                        val element = deviceListJSON.getJSONObject(i)
+                        val device = Device(
+                            name = element.getString("name"),
+                            requiresOtp = element.getBoolean("requiresOtp"),
+                            id = element.getInt("id"),
+                            battery = element.getDouble("battery"),
+                            predictedZeroAt = element.getString("predictedZeroAt"),
+                            favorite = element.getBoolean("favorite"),
+                            isPLuggedIn = element.getBoolean("isPluggedIn"),
+                            chargingStatus = element.getBoolean("chargingStatus"),
+                            cycles = element.getInt("cyclesCached"),
+                            healthScore = element.getInt("batteryHealthScoreCached"),
+                            healthyPercentCharged = element.getInt("percentHealthyChargesCached")
+                        )
 
-                        val bm = applicationContext.getSystemService(BATTERY_SERVICE) as BatteryManager
-                        val batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
-
-
-                        val url = URL("https://batterysync.de:3000/device/register?system=phone&battery=${0.01 * batLevel.toDouble()}")
-                        val connection = url.openConnection() as HttpURLConnection
-                        connection.requestMethod = "POST"
-                        connection.connectTimeout = 5000
-                        connection.readTimeout = 5000
-                        connection.setRequestProperty("Content-Type","application/json")
-                        connection.setRequestProperty("Authorization", token)
-
-                        val responseCode = connection.responseCode
-
-                        if (responseCode == 200) {
-                            val response = connection.inputStream.bufferedReader().use { it.readText() }
-
-                            Log.d("MainActivity", "Got assigned UUID: $response")
-
-                            // Save token in background
-                            dataStoreManager.saveUUID(response)
-
-                            uuid = response
-
-                            getDisplayName(response)
-                        } else {
-                            generalLoadingState = false
-                        }
+                        deviceList = deviceList.plus(device)
                     } catch (e: Exception) {
-                        generalLoadingState = false
-                        registrationStatus = false
-                        dataStoreManager.saveUUID("")
-                        Log.e("MainActivity", e.printStackTrace().toString())
-                    }
 
+                        Log.e("MainActivity", "Error in parsing: $e")
+                    }
                 }
-            }.start()
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Error in parsing $data: $e")
+            }
+        }
+
+        fun loadOffline() {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                localId = store.getLocalId()
+                localDeviceName = store.getDeviceName() ?: "Dieses Gerät"
+                displayUsername = store.getUserName() ?: "Nutzer"
+                val storedDevices = store.getAllDevices()
+                if (!storedDevices.isNullOrEmpty()) parseDeviceJSON(storedDevices)
+                else parseDeviceJSON("[]")
+            }
+        }
+
+        fun checkRegistrationStatus(success: () -> Unit, fail: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                val uuid = store.getUuid()
+                if (uuid.isNullOrEmpty()) fail()
+                else {
+                    request("POST", "/device/uuid?uuid=$uuid&build=${Globals().BUILD}", token) { code, res ->
+                        if (code == 200) {
+                            val json = JSONObject(res)
+                            val deviceName = json.getString("name")
+                            val id = json.getInt("id")
+                            localId = id
+                            localDeviceName = deviceName
+                            registrationStatus = true
+                            CoroutineScope(Dispatchers.IO).launch {
+                                store.saveLocalId(id)
+                                store.saveDeviceName(deviceName)
+                                withContext(Dispatchers.Main) {
+                                    success()
+                                }
+                            }
+                        } else {
+                            registrationStatus = false
+                            fail()
+                        }
+                    }
+                }
+            }
+        }
+
+        fun loadAllData(onSuccess: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                val uuid = store.getUuid()
+                val build = Globals().BUILD
+                if (!token.isNullOrEmpty() && !offline) {
+                    withContext(Dispatchers.Main) {
+                        // Right here, using the "checkRegistrationStatus" function should be better
+                        Log.d("MainActivity", "Requesting device info")
+                        if (!uuid.isNullOrEmpty()) request("POST", "/device/uuid?uuid=$uuid&build=$build", token,
+                            onFinish = { code, res ->
+                                Log.d("MainActivity", "Got device info $code:$res")
+                                if (code == 200) {
+                                    val json = JSONObject(res)
+                                    val deviceName = json.getString("name")
+                                    val id = json.getInt("id")
+                                    localId = id
+                                    localDeviceName = deviceName
+                                    registrationStatus = true
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        store.saveLocalId(id)
+                                        store.saveDeviceName(deviceName)
+                                    }
+                                    request("GET", "/device", token, onFinish = { code, res ->
+                                        Log.d("MainActivity", "Request device list")
+                                        if (code == 200) {
+                                            Log.d("MainActivity", "Got device list")
+                                            parseDeviceJSON(res)
+                                            Log.d("MainActivity", "Parsed device list")
+                                            onSuccess()
+                                        } else {
+                                            Log.d("MainActivity", "Did not get device list")
+                                        }
+                                    })
+                                } else if (code == 404) {
+                                    // This device is not registered!
+                                    registrationStatus = false
+                                    request("GET", "/device", token, onFinish = { code, res ->
+                                        Log.d("MainActivity", "Request device list")
+                                        if (code == 200) {
+                                            Log.d("MainActivity", "Got device list")
+                                            parseDeviceJSON(res)
+                                            Log.d("MainActivity", "Parsed device list")
+                                            onSuccess()
+                                        } else {
+                                            Log.d("MainActivity", "Did not get device list")
+                                        }
+                                    })
+                                } else {
+                                    // We are offline?
+                                    loadOffline()
+                                    CoroutineScope(Dispatchers.Main).launch {
+                                        onSuccess()
+                                    }
+                                }
+                            }
+                        )
+                        else {
+                            request("GET", "/device", token, onFinish = { code, res ->
+                                Log.d("MainActivity", "Request device list")
+                                if (code == 200) {
+                                    Log.d("MainActivity", "Got device list")
+                                    parseDeviceJSON(res)
+                                    Log.d("MainActivity", "Parsed device list")
+                                    onSuccess()
+                                } else {
+                                    Log.d("MainActivity", "Did not get device list")
+                                }
+                            })
+                        }
+                    }
+                } else {
+                    loadOffline()
+                    CoroutineScope(Dispatchers.Main).launch {
+                        onSuccess()
+                    }
+                }
+            }
+        }
+
+        fun getDeviceList(success: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                request("GET", "/device", token, onFinish = { code, res ->
+                    if (code == 200) {
+                        parseDeviceJSON(res)
+                        success()
+                    }
+                })
+            }
 
         }
 
-        fun checkOtpCreatable(device: Device) {
-            Thread {
-                generalLoadingState = true
-                try {
+        fun login(username: String, password: String, success: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            request("POST", "/login?email=$username&password=$password", null) { code, res ->
+                if (code == 200) {
                     CoroutineScope(Dispatchers.IO).launch {
-                        token = dataStoreManager.getToken()
+                        store.saveToken(res)
+                        withContext(Dispatchers.Main) {
+                            success()
+                        }
                     }
-                    val url = URL("https://batterysync.de:3000/device/otpCreatable?id=${device.id}")
-                    val connection = url.openConnection() as HttpURLConnection
-                    connection.requestMethod = "GET"
-                    connection.connectTimeout = 5000
-                    connection.readTimeout = 5000
-                    connection.setRequestProperty("Authorization", token)
+                }
+            }
+        }
 
-                    val secondResponseCode = connection.responseCode
+        fun logout(delete: Boolean, success: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                val uuid = store.getUuid()
+                val url = if (delete) "/device/logout/delete?uuid=$uuid" else "/device/logout/inactive?uuid=$uuid"
+                request("POST", url, token) { code, res ->
+                    Log.d("MainActivity", "Logout response: $code:$res")
+                    if (code == 200) {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            store.resetAll()
+                            withContext(Dispatchers.Main) {
+                                success()
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
-                    if (secondResponseCode == 200) {
-                        generalLoadingState = false
-                        val response = connection.inputStream.bufferedReader().use { it.readText() }
+        fun getUsername(success: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                request("GET", "/login/auth", token) { code, res ->
+                    if (code == 200) {
+                        displayUsername = res
+                        CoroutineScope(Dispatchers.IO).launch {
+                            store.saveUserName(res)
+                            withContext(Dispatchers.Main) {
+                                success()
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
+        fun registerDevice(success: () -> Unit, fail: () -> Unit) {
+            val bm = applicationContext.getSystemService(BATTERY_SERVICE) as BatteryManager
+            val batLevel = bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                request("POST", "/device/register?system=phone&battery=${0.01 * batLevel.toDouble()}", token) { code, res ->
+                    if (code == 200) {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            store.saveUUID(res)
+                            withContext(Dispatchers.Main) {
+                                success()
+                            }
+                        }
+                    } else fail()
+                }
+            }
+        }
+
+        fun checkOtpCreatable(device: Device, success: () -> Unit, fail: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                request("GET", "/device/otpCreatable?id=${device.id}", token) { code, res ->
+                    if (code == 200) {
                         selectedReplaceDeviceCanGenerateOtp = try {
-                            JSONObject(response).getBoolean("status")
-                        } catch (e: Exception) {
+                            JSONObject(res).getBoolean("status")
+                        } catch (_: Exception) {
                             null
                         }
-                    } else {
-                        generalLoadingState = false
-                    }
-                } catch (e: Exception) {
-                    generalLoadingState = false
-                    Log.e("MainActivity", e.printStackTrace().toString())
-                }
-            }.start()
-        }
-
-        fun sendCodeToDevice(device: Device) {
-            Log.d("MainActivity", "Send code")
-            Thread {
-                generalLoadingState = true
-                try {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        token = dataStoreManager.getToken()
-                    }
-                        val url = URL("https://batterysync.de:3000/device/otp?id=${device.id}")
-                        val connection = url.openConnection() as HttpURLConnection
-                        connection.requestMethod = "POST"
-                        connection.connectTimeout = 5000
-                        connection.readTimeout = 5000
-                        connection.setRequestProperty("Content-Type","application/json")
-                        connection.setRequestProperty("Authorization", token)
-
-                        val secondResponseCode = connection.responseCode
-
-                        if (secondResponseCode == 200) {
-                            generalLoadingState = false
-                        } else {
-                            generalLoadingState = false
-                        }
-                } catch (e: Exception) {
-                    generalLoadingState = false
-                    Log.e("MainActivity", e.printStackTrace().toString())
-                }
-            }.start()
-        }
-
-        fun confirmOtp(device: Device, otp: String, success: () -> Unit) {
-            Thread {
-                otpInputWrong = null
-                generalLoadingState = true
-                try {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        token = dataStoreManager.getToken()
-                    }
-                    val url = URL("https://batterysync.de:3000/device/newUuid?id=${device.id}&otp=$otp")
-                    val connection = url.openConnection() as HttpURLConnection
-                    connection.requestMethod = "POST"
-                    connection.connectTimeout = 5000
-                    connection.readTimeout = 5000
-                    connection.setRequestProperty("Content-Type","application/json")
-                    connection.setRequestProperty("Authorization", token)
-
-                    val secondResponseCode = connection.responseCode
-
-                    if (secondResponseCode == 200) {
-                        val response = connection.inputStream.bufferedReader().use { it.readText() }
-
-                        Log.d("MainActivity", "Got new uuid: $response")
-
-                        otpInputWrong = null
-
-                        CoroutineScope(Dispatchers.IO).launch {
-                            dataStoreManager.saveUUID(response)
-                            getDisplayName(response)
-                            uuid = response
-                            withContext(Dispatchers.Main) {
-                                success()
-                            }
-
-                        }
-                    } else {
-                        generalLoadingState = false
-                        otpInputWrong = true
-                    }
-
-                } catch (e: Exception) {
-                    generalLoadingState = false
-                    otpInputWrong = true
-                    Log.e("MainActivity", e.printStackTrace().toString())
-                }
-            }.start()
-        }
-
-        fun instantLink(device: Device, success: () -> Unit) {
-            Thread {
-                generalLoadingState = true
-                try {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        token = dataStoreManager.getToken()
-                    }
-                    val url = URL("https://batterysync.de:3000/device/newUuid?id=${device.id}")
-                    val connection = url.openConnection() as HttpURLConnection
-                    connection.requestMethod = "POST"
-                    connection.connectTimeout = 5000
-                    connection.readTimeout = 5000
-                    connection.setRequestProperty("Content-Type","application/json")
-                    connection.setRequestProperty("Authorization", token)
-
-                    val secondResponseCode = connection.responseCode
-
-                    if (secondResponseCode == 200) {
-                        val response = connection.inputStream.bufferedReader().use { it.readText() }
-
-                        Log.d("MainActivity", "Got new uuid: $response")
-
-                        CoroutineScope(Dispatchers.IO).launch {
-                            dataStoreManager.saveUUID(response)
-                            getDisplayName(response)
-                            uuid = response
-                            withContext(Dispatchers.Main) {
-                                success()
-                            }
-
-                        }
-                    } else {
-                        generalLoadingState = false
-                    }
-
-                } catch (e: Exception) {
-                    generalLoadingState = false
-                    Log.e("MainActivity", e.printStackTrace().toString())
-                }
-            }.start()
-        }
-
-        fun renameDevice(name: String, success: () -> Unit) {
-            Log.d("MainActivity", "Rename device to $name")
-            Thread {
-                generalLoadingState = true
-                try {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        token = dataStoreManager.getToken()
-                        uuid = dataStoreManager.getUuid()
-                    }
-                    val url = URL("https://batterysync.de:3000/device/name?uuid=$uuid&name=$name")
-                    val connection = url.openConnection() as HttpURLConnection
-                    connection.requestMethod = "PATCH"
-                    connection.connectTimeout = 5000
-                    connection.readTimeout = 5000
-                    connection.setRequestProperty("Content-Type","application/json")
-                    connection.setRequestProperty("Authorization", token)
-
-                    val secondResponseCode = connection.responseCode
-
-                    if (secondResponseCode == 200) {
-                        val response = connection.inputStream.bufferedReader().use { it.readText() }
-
-                        ownDisplayName = response
                         success()
-
-                        generalLoadingState = false
                     } else {
-                        generalLoadingState = false
+                        fail()
                     }
-                } catch (e: Exception) {
-                    generalLoadingState = false
-                    Log.e("MainActivity", e.printStackTrace().toString())
                 }
-            }.start()
+            }
         }
 
-        fun registerUser(username: String, password: String, onSuccess: () -> Unit) {
-            Log.d("MainActivity", "Register user $username")
-            Thread {
-                generalLoadingState = true
-                try {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        token = dataStoreManager.getToken()
+        fun sendCodeToDevice(device: Device, success: () -> Unit, fail: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                request("POST", "/device/otp?id=${device.id}", token) { code, _ ->
+                    if (code == 200) {
+                        success()
+                    } else {
+                        fail()
                     }
-                    val url = URL("https://batterysync.de:3000/login/register?email=$username&password=$password")
-                    val connection = url.openConnection() as HttpURLConnection
-                    connection.requestMethod = "POST"
-                    connection.connectTimeout = 5000
-                    connection.readTimeout = 5000
-                    connection.setRequestProperty("Content-Type","application/json")
-                    connection.setRequestProperty("Authorization", token)
+                }
+            }
+        }
 
-                    val secondResponseCode = connection.responseCode
-
-                    if (secondResponseCode == 200) {
-                        val response = connection.inputStream.bufferedReader().use { it.readText() }
-
+        fun confirmOtp(device: Device, otp: String, success: () -> Unit, fail: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                request("POST", "/device/newUuid?id=${device.id}&otp=$otp", token) { code, res ->
+                    if (code == 200) {
+                        otpInputWrong = null
                         CoroutineScope(Dispatchers.IO).launch {
-                            // Save token in background
-                            dataStoreManager.saveToken(token = response)
-
-                            // Switch back to UI thread
-                            withContext(Dispatchers.Main) {
-                                generalLoadingState = false
-                                onSuccess()
-                            }
+                            store.saveUUID(res)
+                            checkRegistrationStatus(success = {
+                                success()
+                            }, fail = {
+                                fail()
+                            })
                         }
-
-
+                    } else {
+                        otpInputWrong = true
                         generalLoadingState = false
+                        fail()
+                    }
+                }
+            }
+        }
+
+        fun instantLink(device: Device, success: () -> Unit, fail: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                request("POST", "/device/newUuid?id=${device.id}", token) { code, res ->
+                    if (code == 200) {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            store.saveUUID(res)
+                            checkRegistrationStatus(
+                                success = { success() },
+                                fail = { fail() }
+                            )
+                        }
                     } else {
                         generalLoadingState = false
+                        fail()
                     }
-                } catch (e: Exception) {
-                    generalLoadingState = false
-                    Log.e("MainActivity", e.printStackTrace().toString())
                 }
-            }.start()
+            }
+        }
+
+
+        fun renameDevice(name: String, callback: (Boolean) -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                val uuid = store.getUuid()
+                if (uuid.isNullOrEmpty()) callback(false)
+                else {
+                    request("PATCH", "/device/name?uuid=$uuid&name=$name", token) { code, res ->
+                        if (code == 200) {
+                            localDeviceName = res
+                            CoroutineScope(Dispatchers.IO).launch {
+                                store.saveDeviceName(res)
+                                notifyWidgets(applicationContext)
+                                getDeviceList({ callback(true) })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        fun registerUser(username: String, password: String, success: () -> Unit, fail: () -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                request("POST", "/login/register?email=$username&password=$password", null) { code, res ->
+                    if (code == 200) {
+                        CoroutineScope(Dispatchers.IO).launch {
+                            store.saveToken(res)
+                            withContext(Dispatchers.Main) {
+                                success()
+                            }
+                        }
+                    } else {
+                        fail()
+                    }
+                }
+            }
+        }
+
+
+        fun getDeviceHistory(id: Int, callback: (BatteryHistory?) -> Unit) {
+            val store = DataStoreManager(applicationContext)
+            CoroutineScope(Dispatchers.IO).launch {
+                val token = store.getToken()
+                request("GET", "/device/history?id=$id", token) { code, res ->
+                    if (code == 200) {
+                        callback(parseBatteryHistory(res))
+                    } else {
+                        callback(null)
+                    }
+                }
+            }
         }
 
         fun foregroundInterval() {
@@ -702,26 +561,78 @@ class MainActivity : ComponentActivity() {
             var startDestination = "login"
 
             if (!token.isNullOrEmpty()) {
-                Log.d("MainActivity", "Found Token")
-                getUsername(onSuccess = {
-                    Log.d("MainActivity", "Got user name")
-                    checkRegistrationStatus()
-                    getDeviceList()
-                    foregroundInterval()
-                    startDestination = "home"
-                    navController.navigate("home") {
-                        popUpTo(0) // This clears the entire backstack
-                    }
-                })
+                // The user has logged in once, as this token can only be saved by a
+                // successful login call. That means that we must check if that login is valid.
+                // The following cases are possible:
+                // 1 - The server returns 200, meaning the login is valid
+                //        - The user is directed to the home page
+                // 2 - The server returns 422, meaning the login is invalid
+                //        - The user must login again
+                // 3 - The server returns nothing, meaning there is no connection
+                //        - The user is directed to the home page, with offline notice.
+                //          Some features are disabled.
 
-            } else {
-                Log.d("MainActivity", "Did not find Token")
+                checkLogin(
+                    success = {
+                        Log.d("MainActivity", "Logged in")
+                        startDestination = "home"
+                        loadAllData(onSuccess = {
+                            Log.d("MainActivity", "Loaded data")
+                            foregroundInterval()
+                            navController.navigate("home") {
+                                popUpTo(0)
+                            }
+                        })
+                    },
+                    offline = {
+                        Log.d("MainActivity", "Offline")
+                        startDestination = "home"
+                        offline = true
+                        loadOffline()
+                        foregroundInterval()
+                        navController.navigate("home") {
+                            popUpTo(0)
+                        }
+                    },
+                    fail = {
+                        //
+                    }
+                )
 
             }
 
             NavHost(
                 navController = navController,
-                startDestination = startDestination
+                startDestination = startDestination,
+
+                // 1. Moving Forward: New screen slides in from right
+                enterTransition = {
+                    slideIntoContainer(
+                        AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(400, easing = EaseOutCubic)
+                    )
+                },
+                // 2. Moving Forward: Current screen slides out to the left
+                exitTransition = {
+                    slideOutOfContainer(
+                        AnimatedContentTransitionScope.SlideDirection.Left,
+                        animationSpec = tween(400, easing = EaseOutCubic)
+                    )
+                },
+                // 3. Hitting Back: Previous screen slides back in from the left
+                popEnterTransition = {
+                    slideIntoContainer(
+                        AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(400, easing = EaseOutCubic)
+                    )
+                },
+                // 4. Hitting Back: Current screen slides off the edge to the right
+                popExitTransition = {
+                    slideOutOfContainer(
+                        AnimatedContentTransitionScope.SlideDirection.Right,
+                        animationSpec = tween(400, easing = EaseOutCubic)
+                    )
+                }
             ) {
                 composable("login") {
                     WelcomeScreen().display(
@@ -732,14 +643,17 @@ class MainActivity : ComponentActivity() {
                                 Log.d("MainActivity", "Navigate to Home")
                                 generalErrorMessage = null
                                 navController.navigate("home") {
-                                    getUsername()
-                                    checkRegistrationStatus()
-                                    getDeviceList()
-                                    foregroundInterval()
-                                    popUpTo("login") { inclusive = true }  // verhindert „Zurück zur Loginseite“
+                                    getUsername({
+                                        loadAllData {
+                                            foregroundInterval()
+                                            popUpTo("login") { inclusive = true }  // verhindert „Zurück zur Loginseite“
+                                        }
+                                    })
+
                                 }
                             }
-                        }, onRegister = { username, password, repeatPassword ->
+                        },
+                        onRegister = { username, password, repeatPassword ->
                             generalLoadingState = true
                             if (password.length < 8) {
                                 generalErrorMessage = "Passwort muss mindestens 8 Zeichen lang sein."
@@ -754,84 +668,129 @@ class MainActivity : ComponentActivity() {
                                 generalErrorMessage = "Nutzername muss mindestens 4 Zeichen lang sein"
                             }
 
-                            registerUser(username, password) {
-                                Log.d("MainActivity", "Navigate to Home")
-                                generalErrorMessage = null
-                                navController.navigate("home") {
-                                    getUsername()
-                                    checkRegistrationStatus()
-                                    popUpTo("login") { inclusive = true }  // verhindert „Zurück zur Loginseite“
-                                }
-                            }
+                            registerUser(username, password,
+                                success = {
+                                    Log.d("MainActivity", "Navigate to Home")
+                                    generalErrorMessage = null
+                                    loadAllData {
+                                        getUsername {
+                                            navController.navigate("home") {
+                                                popUpTo(0)
+                                            }
+                                        }
+
+                                    }
+
+                                }, fail = {}
+                            )
 
                         }
                     )
                 }
 
-                composable("home") { backStackEntry ->
-                    HomeScreen().display(displayUsername, registrationStatus, ownDisplayName, uuid, generalLoadingState, generalErrorMessage, deviceList, deviceListIsRefreshing, foregroundServiceIsRunning,
-                        logout = { delete ->
-                            if (registrationStatus) {
-                                logout(delete) {
-                                    Log.d("MainActiviy", "Navigate to login")
-                                    generalErrorMessage = null
-                                    CoroutineScope(Dispatchers.IO).launch {
-                                        dataStoreManager.saveToken("")
-                                        dataStoreManager.saveAllDevices("[]")
-                                        dataStoreManager.saveUUID("")
-                                        displayUsername = ""
-                                        ownDisplayName = null
-                                        registrationStatus = false
-                                        uuid = null
-                                        token = null
-                                    }
+                composable("home") { _ ->
+                    DeviceDashboardScreen(deviceList, localId, localDeviceName, foregroundServiceIsRunning, displayUsername, offline,
+                        onRegister = { registerDevice(
+                            success = {
+                                getDeviceList {
+                                    checkRegistrationStatus(
+                                        success = {}, fail = {}
+                                    )
+                                }
+
+                            },
+                            fail = {}
+                        ) },
+                        onInherit = {
+                            getDeviceList({
+                                otpInputWrong = null
+                                generalErrorMessage = null
+                                navController.navigate("replaceDevice")
+                            })
+
+                        },
+                        onOpenSettings = {
+                            CoroutineScope(Dispatchers.IO).launch {
+                                widgetAlwaysFirst = DataStoreManager(applicationContext).getWidgetAlwaysFirst()
+                                widgetShowPercent = DataStoreManager(applicationContext).getWidgetShowPercent()
+                                widetDarkMode = DataStoreManager(applicationContext).getWidgetDarkMode()
+                                widgetTransparency = DataStoreManager(applicationContext).getWidgetTransparency().toFloat() / 100f
+                            }
+                            navController.navigate("settings")
+                        },
+                        onStartService = {
+                            startForegroundService()
+                            foregroundServiceIsRunning = BatteryService.isRunning
+                        },
+                        fetchBatteryHistory = { deviceId, callback ->
+                            getDeviceHistory(deviceId, callback)
+                        }
+                    )
+                }
+
+                composable("settings") { _ ->
+                    SettingsScreen(initialShowPercent = widgetShowPercent, initialAlwaysFirst = widgetAlwaysFirst, initialDarkMode = widetDarkMode, initialTransparency = widgetTransparency, currentDeviceName = localDeviceName, registrationStatus = registrationStatus, offline = offline,
+                        finish = {
+                            navController.popBackStack()
+                        },
+                        saveAndFinish = { showPercent, alwaysFirst, darkMode, transparency ->
+                            CoroutineScope(Dispatchers.IO).launch {
+                                DataStoreManager(applicationContext).saveWidgetAlwaysFirst(alwaysFirst)
+                                DataStoreManager(applicationContext).saveWidgetShowPercent(showPercent)
+                                DataStoreManager(applicationContext).saveWidgetDarkMode(darkMode)
+                                DataStoreManager(applicationContext).saveWidgetTransparency((transparency * 100f).toInt())
+                                notifyWidgets(applicationContext)
+                            }
+                            navController.popBackStack()
+                        },
+                        changeDeviceName = { name, callback ->
+                            renameDevice(name, callback)
+                        },
+                        onLogoutOnly = {
+                            generalErrorMessage = null
+
+                            if (registrationStatus) logout(false) {
                                     navController.navigate("login") {
                                         popUpTo("home") { inclusive = true }  // verhindert „Zurück zur Loginseite“
                                     }
                                 }
-                            } else {
+                            else {
+                                CoroutineScope(Dispatchers.IO).launch {
+                                    DataStoreManager(applicationContext).resetAll()
+                                    withContext(Dispatchers.Main) {
+                                        navController.navigate("login") {
+                                            popUpTo("home") { inclusive = true }  // verhindert „Zurück zur Loginseite“
+                                        }
+                                    }
+                                }
+                            }
+
+                        },
+                        onLogoutAndDeleteData = {
+                            logout(true) {
                                 Log.d("MainActiviy", "Navigate to login")
                                 generalErrorMessage = null
+                                /*
                                 CoroutineScope(Dispatchers.IO).launch {
+                                    DataStoreManager(applicationContext).saveLocalId(0)
                                     dataStoreManager.saveToken("")
                                     dataStoreManager.saveAllDevices("[]")
                                     dataStoreManager.saveUUID("")
                                     displayUsername = ""
-                                    ownDisplayName = null
+                                    localDeviceName = null
                                     registrationStatus = false
                                     uuid = null
                                     token = null
-                                }
+                                }*/
                                 navController.navigate("login") {
                                     popUpTo("home") { inclusive = true }  // verhindert „Zurück zur Loginseite“
                                 }
                             }
-                    }, onOpenReplaceOld = {
-                        Log.d("MainActivity", "Navigate to replaceDevice")
-                        getDeviceList()
-                        otpInputWrong = null
-                        generalErrorMessage = null
-                        navController.navigate("replaceDevice")
-                    }, registerDevice = {
-                        registerDevice()
-                    }, renameDevice = { name, success ->
-                        renameDevice(name, success)
-                    }, onRefresh = {
-                        deviceListIsRefreshing = true
-                        getUsername()
-                        checkRegistrationStatus()
-                        getDeviceList()
-                    }, startForegroundService = {
-                        startForegroundService()
-                        foregroundServiceIsRunning = BatteryService.isRunning
-                    }, openWebsite = {
-                        openWebsite()
-                    }, openDevice = { id ->
-                        openDevice(id)
-                    })
+                        }
+                    )
                 }
 
-                composable("replaceDevice") { backStackEntry ->
+                composable("replaceDevice") { _ ->
                     ReplaceDeviceScreen().DeviceLinkScreen(applicationContext,
                         deviceList,
                         generalLoadingState,
@@ -840,36 +799,50 @@ class MainActivity : ComponentActivity() {
                         otpInputWrong,
                         onRefresh = {
                             deviceListIsRefreshing = true
-                            getDeviceList()
+                            getDeviceList {}
                         }, onSendCode = { device ->
-                            sendCodeToDevice(device)
+                            sendCodeToDevice(device, {}, {})
                         }, onConfirmInputCode = { code, device ->
                             generalLoadingState = true
-                            confirmOtp(device, code) {
-                                Log.d("MainActivity", "Input code: $code for device ${device.name}")
-                                navController.navigate("home") {
-                                    getUsername()
-                                    checkRegistrationStatus()
-                                    popUpTo("replaceDevice") { inclusive = true }  // verhindert zurück
-                                }
-                                generalLoadingState = false
-                            }
+                            confirmOtp(device, code,
+                                success = {
+                                    Log.d("MainActivity", "Input code: $code for device ${device.name}")
+                                    navController.navigate("home") {
+                                        getUsername {
+                                            checkRegistrationStatus(
+                                                success = {
+                                                    popUpTo(0)
+                                                }, fail = {}
+                                            )
+                                        }
 
+                                    }
+                                    generalLoadingState = false
+                                },
+                                fail = {}
+                            )
                         }, onLinkNow = { device ->
                             generalLoadingState = true
                             Log.d("MainActivity", "Request instant link for ${device.name}")
-                            instantLink(device) {
-                                Log.d("MainActivity", "Success link for ${device.name}")
-                                navController.navigate("home") {
-                                    getUsername()
-                                    checkRegistrationStatus()
-                                    popUpTo("replaceDevice") { inclusive = true }  // verhindert zurück
-                                }
-                                generalLoadingState = false
-                            }
+                            instantLink(device,
+                                success =  {
+                                    Log.d("MainActivity", "Success link for ${device.name}")
+                                    navController.navigate("home") {
+                                        getUsername {
+                                            checkRegistrationStatus(
+                                                success = {
+                                                    popUpTo(0)
+                                                }, fail = {}
+                                            )
+                                        }
+
+                                    }
+                                    generalLoadingState = false
+                                }, fail = {}
+                            )
                         }, onSelectDevice = { device ->
                             selectedReplaceDeviceCanGenerateOtp = null
-                            checkOtpCreatable(device)
+                            checkOtpCreatable(device, {}, {})
                         })
                 }
             }
@@ -878,10 +851,6 @@ class MainActivity : ComponentActivity() {
 
 
         requestRequiredPermissions()
-
-
-        //val filter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
-        //registerReceiver(batteryReceiver, filter);
     }
 
     override fun onDestroy() {

@@ -25,6 +25,7 @@ import java.util.TimerTask
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.BatteryManager
 import android.widget.Toast
 import android.os.Handler
 import android.os.Looper
@@ -33,6 +34,9 @@ import androidx.glance.appwidget.updateAll
 import kotlinx.serialization.*
 import kotlinx.serialization.json.*
 import androidx.core.net.toUri
+import androidx.glance.appwidget.state.updateAppWidgetState
+import org.json.JSONArray
+import org.json.JSONObject
 
 class BatteryService : Service() {
     private lateinit var batteryReceiver: BatteryStatusReceiver
@@ -107,7 +111,7 @@ class BatteryService : Service() {
 
                 val isInteractive = pm.isInteractive // true = Bildschirm ist an
 
-                var nextInterval: Long = 50000
+                var nextInterval: Long = 10000
 
                 if (isInteractive) {
                     Log.d("BatteryService", "Timer execution long interval")
@@ -120,7 +124,7 @@ class BatteryService : Service() {
                         } else if (!token.isNullOrEmpty()) {
                             getDevicesInfo(token)
                         }
-                        nextInterval = 50000
+                        nextInterval = 10000
                     }
                 } else {
                     Log.d("BatteryService", "Timer executing Shorter timer interval set")
@@ -258,8 +262,12 @@ class BatteryService : Service() {
                     val response = connection.inputStream.bufferedReader().use { it.readText() }
                     Log.d("BatteryService GET SECURE", "Antwort: $response")
                     CoroutineScope(Dispatchers.IO).launch {
+                        val oldData = DataStoreManager(applicationContext).getAllDevices()
                         DataStoreManager(applicationContext).saveAllDevices(response)
-                        notifyWidgets(applicationContext)
+                        if (different(oldData ?: "[]", response) || batteryStatusChanged()) {
+                            Log.d("BatteryService", "Device Data Changed")
+                            notifyWidgets(applicationContext)
+                        } else Log.d("BatteryService", "Device Data did not change")
                     }
 
                 } else {
@@ -269,22 +277,16 @@ class BatteryService : Service() {
                 connection.disconnect()
             } catch (e: Exception) {
                 Log.e("BatteryService GET SECURE", "Fehler beim Senden: ${e}")
+                CoroutineScope(Dispatchers.IO).launch {
+                    if (batteryStatusChanged()) {
+                        Log.d("BatteryService", "Local State has changed")
+                        notifyWidgets(applicationContext)
+                    } else {
+                        Log.d("BatteryService", "Local State did not change")
+                    }
+                }
             }
         }.start()
-    }
-
-
-    suspend fun notifyWidgets(context: Context) {
-        /*
-        val manager = AppWidgetManager.getInstance(context)
-        val widgetIds = manager.getAppWidgetIds(ComponentName(context, BatteryWidget::class.java))
-        for (widgetId in widgetIds) {
-            Log.d("BatteryService", "Update Widget $widgetId")
-            BatteryWidget.updateWidget(context, manager, widgetId)
-        }*/
-
-        Log.d("BatteryService", "update new widget")
-        DeviceWidget().updateAll(context)
     }
 
     fun sendNotification(context: Context, title: String, message: String, loud: Boolean, link: String) {
@@ -369,6 +371,62 @@ class BatteryService : Service() {
         mainHandler.post {
             sendNotification(context, title, message, loud, link) // the function we wrote before
         }
+    }
+
+    fun different(string1: String, string2: String): Boolean {
+        val json1 = JSONArray(string1)
+        val json2 = JSONArray(string2)
+
+        if (json1.length() != json2.length()) return true
+
+        for (i in 0 until json1.length()) {
+            val j1 = json1.getJSONObject(i)
+            val j2 = json2.getJSONObject(i)
+
+            if (j1.getString("name") != j2.getString("name")) return true
+            if ((j1.getDouble("battery" ) * 100f).toInt() !=  (j2.getDouble("battery")*100f).toInt()) return true
+            if (j1.getBoolean("chargingStatus") != j2.getBoolean("chargingStatus")) return true
+            if (j1.getBoolean("isPluggedIn") != j2.getBoolean("isPluggedIn")) return true
+        }
+
+        return false
+    }
+
+    suspend fun batteryStatusChanged(): Boolean {
+
+        val lastStatusString = DataStoreManager(applicationContext).getLastLocalBatteryStatus()
+        if (lastStatusString == "{}") {
+            Log.d("BatteryService", "No local battery state available")
+            return false
+        }
+        val lastStatus = JSONObject(lastStatusString)
+
+        val batteryStatus: Intent? = IntentFilter(Intent.ACTION_BATTERY_CHANGED).let { ifilter ->
+            applicationContext.registerReceiver(null, ifilter)
+        }
+
+        if (batteryStatus != null) {
+            val level = batteryStatus.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = batteryStatus.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            val batteryPct = (level / scale.toDouble())
+
+            val status = batteryStatus.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
+            val isCharging: Boolean = status == BatteryManager.BATTERY_STATUS_CHARGING
+
+            val chargePlug = batteryStatus.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1);
+            val isPluggedIn = chargePlug == BatteryManager.BATTERY_PLUGGED_AC ||
+                    chargePlug == BatteryManager.BATTERY_PLUGGED_USB ||
+                    chargePlug == BatteryManager.BATTERY_PLUGGED_WIRELESS
+
+            // Only save the latest state after checking
+            DataStoreManager(applicationContext).saveLatestLocalBatteryStatus("{battery:${batteryPct},chargingStatus:${isCharging},isPluggedIn:${isPluggedIn}}")
+
+            if (lastStatus.getDouble("battery") != batteryPct) return true
+            if (lastStatus.getBoolean("chargingStatus") != isCharging) return true
+            if (lastStatus.getBoolean("isPluggedIn") != isPluggedIn) return true
+        }
+
+        return false
     }
 
 

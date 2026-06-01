@@ -46,6 +46,7 @@ class ReplaceDeviceScreen {
         onLinkNow: (device: MainActivity.Device) -> Unit,
         onSelectDevice: (device: MainActivity.Device) -> Unit
     ) {
+        val BackgroundDark = Color(0xFF0F1318)
         val green = Color(0xFF7CDE89)
         val teal = Color(0xFF28B0A5)
         val blue = Color(0xFF3E73B8)
@@ -60,7 +61,7 @@ class ReplaceDeviceScreen {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(BackgroundDark)
         ) {
             // --- MAIN CONTENT ---
             Column(
@@ -254,7 +255,7 @@ class ReplaceDeviceScreen {
             modifier = Modifier
                 .fillMaxWidth()
                 .background(
-                    if (isSelected) Color(0xFF1A2A2A) else Color(0xFF0F1A1A),
+                    Color(0xFF1E222B),
                     RoundedCornerShape(16.dp)
                 )
                 .clickable { onClick() }
