@@ -136,11 +136,13 @@ fun DeviceDashboardScreen(
         onRefresh = {
             isRefreshing = true
             // Haptik bei Beginn: Kurzer mechanischer Klick
+            Log.d("Haptic", "start refresh")
             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
 
             refreshAll {
                 isRefreshing = false
                 // Haptik bei Ende: Spürbarer Bestätigungs-Impuls
+                Log.d("Haptic", "end refresh")
                 view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
             }
         },
@@ -307,6 +309,7 @@ fun DeviceCard(device: MainActivity.Device, offline: Boolean, fetchBatteryHistor
 
     var isLoadingHistory by remember { mutableStateOf(false) }
     var history by remember { mutableStateOf(BatteryHistory(day = emptyList(), week = emptyList())) }
+    var latestExpandState by remember { mutableStateOf(false) }
     val view = LocalView.current
 
     LaunchedEffect(device) {
@@ -315,13 +318,19 @@ fun DeviceCard(device: MainActivity.Device, offline: Boolean, fetchBatteryHistor
     }
 
     LaunchedEffect(isExpanded) {
-        if (isExpanded) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        if (isExpanded != latestExpandState) {
+            latestExpandState = isExpanded
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            Log.d("Haptic", "expand listener")
+        }
+
         if (isExpanded && (history.day.isEmpty() || history.week.isEmpty())) {
             isLoadingHistory = true
             fetchBatteryHistory(device.id) { result ->
                 view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+
+                Log.d("Haptic", "loaded graphs")
                 if (result != null) history = result
-                Log.d("Dashboard", "Haptic Feedback")
                 isLoadingHistory = false
             }
         }
@@ -581,7 +590,7 @@ fun BatteryHistoryGraph(
                         if (firstIndex != selectedIndex) {
                             selectedIndex = firstIndex
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            Log.d("Dashboard", "Haptic Feedback")
+                            Log.d("Haptic", "index changed")
                         }
 
                         horizontalDrag(down.id) { change ->
@@ -592,7 +601,8 @@ fun BatteryHistoryGraph(
                             if (nextIndex != selectedIndex) {
                                 selectedIndex = nextIndex
                                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                                Log.d("Dashboard", "Haptic Feedback")
+
+                                Log.d("Haptic", "index changed")
                             }
 
                             if (change.positionChange().x != 0f) {
@@ -605,7 +615,8 @@ fun BatteryHistoryGraph(
                             selectedIndex = lastIndex
                             // Ein optionaler, finaler Klick für das "Zurücksnappen"
                             view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-                            Log.d("Dashboard", "Haptic Feedback")
+
+                            Log.d("Haptic", "snap back")
                         }
                     }
                 }
