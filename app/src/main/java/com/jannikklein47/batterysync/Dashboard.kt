@@ -66,6 +66,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+
 
 fun getRemainingTimeText(predictedZeroAt: String?): String {
     if (predictedZeroAt.isNullOrBlank()) return "--"
@@ -110,137 +112,168 @@ val TextGray = Color(0xFF8A939E)
 val DividerColor = Color(0xFF2C313A)
 
 @Composable
-fun DeviceDashboardScreen(devices: List<MainActivity.Device>, localId: Int, localDeviceName: String, serviceRunning: Boolean, userName: String, offline: Boolean, onRegister: () -> Unit, onInherit: () -> Unit, onOpenSettings: () -> Unit, onStartService: () -> Unit, fetchBatteryHistory: (deviceId: Int, callback: (BatteryHistory?) -> Unit) -> Unit) {
-    Column(
+fun DeviceDashboardScreen(
+    devices: List<MainActivity.Device>,
+    localId: Int,
+    localDeviceName: String,
+    serviceRunning: Boolean,
+    userName: String,
+    offline: Boolean,
+    onRegister: () -> Unit,
+    onInherit: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onStartService: () -> Unit,
+    fetchBatteryHistory: (deviceId: Int, callback: (BatteryHistory?) -> Unit) -> Unit,
+    refreshAll: (onComplete: () -> Unit) -> Unit
+) {
+    // Zustände für das Laden und die Haptik
+    var isRefreshing by remember { mutableStateOf(false) }
+    val view = LocalView.current
+
+    // Die PullToRefreshBox umschließt das gesamte Layout
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            // Haptik bei Beginn: Kurzer mechanischer Klick
+            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+
+            refreshAll {
+                isRefreshing = false
+                // Haptik bei Ende: Spürbarer Bestätigungs-Impuls
+                view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            }
+        },
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundDark)
-            .verticalScroll(rememberScrollState()) // Bedingung 3: Gesamtes Interface scrollbar
-            .padding(16.dp)
+            .background(BackgroundDark) // Hintergrund auf die Box legen, damit der Indikator gut aussieht
     ) {
-        Spacer(modifier = Modifier.height(8.dp))
-        // Header-Bereich
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()) // Erkennt die Pull-Geste automatisch
+                .padding(16.dp)
         ) {
-            Text(
-                text = "Hallo, $userName",
-                color = Color.White,
-                fontSize = 32.sp,
-                fontWeight = FontWeight.Bold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Bedingung 1: Einstellungs-Symbol als IconButton mit settings.xml
-            IconButton(onClick = { onOpenSettings() }) {
-                Icon(
-                    painter = painterResource(id = R.drawable.settings),
-                    contentDescription = "Einstellungen",
-                    tint = Color.White,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-        }
-
-        if (!serviceRunning) {
-            Button(
-                onClick = { onStartService() },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.White),
-                shape = RoundedCornerShape(12.dp),
-                contentPadding = PaddingValues(vertical = 14.dp)
+            // --- Header-Bereich ---
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.alert),
-                    contentDescription = "Achtung",
-                    tint = Color.Red,
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Synchronisierung starten",
-                    color = Color.Black,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "Hallo, $userName",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
                 )
+
+                IconButton(onClick = { onOpenSettings() }) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.settings),
+                        contentDescription = "Einstellungen",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+            if (!serviceRunning) {
+                Button(
+                    onClick = { onStartService() },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(vertical = 14.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.alert),
+                        contentDescription = "Achtung",
+                        tint = Color.Red,
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Synchronisierung starten",
+                        color = Color.Black,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
 
-        if (offline) {
-            Button(
-                onClick = {},
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0x1BFF0000),
-                    disabledContainerColor = Color(0x1BFF0000)
-                ),
-                shape = RoundedCornerShape(12.dp),
-                enabled = false,
-                contentPadding = PaddingValues(14.dp)
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.alert),
-                    contentDescription = "Achtung",
-                    tint = Color(0xFFB01B1B),
-                    modifier = Modifier.size(28.dp)
-                )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            if (offline) {
+                Button(
+                    onClick = {},
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0x1BFF0000),
+                        disabledContainerColor = Color(0x1BFF0000)
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = false,
+                    contentPadding = PaddingValues(14.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.alert),
+                        contentDescription = "Achtung",
+                        tint = Color(0xFFB01B1B),
+                        modifier = Modifier.size(28.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Du bist offline. Dir werden möglicherweise nicht die neuesten Informationen angezeigt.",
+                        color = Color(0xFFB01B1B),
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+            }
+
+            // --- Sektion: Dieses Gerät ---
+            if (devices.find { device -> device.id == localId } != null) {
                 Text(
-                    text = "Du bist offline. Dir werden möglicherweise nicht die neuesten Informationen angezeigt.",
-                    color = Color(0xFFB01B1B),
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold
+                    text = "Dieses Gerät",
+                    color = TextGray,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
                 )
+                DeviceCard(device = devices.find { device -> device.id == localId } ?: devices.first(), offline = offline, fetchBatteryHistory)
+            } else {
+                RegistrationCard(offline, { onRegister() }, { onInherit() })
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-        }
+            Spacer(modifier = Modifier.height(24.dp))
 
-        // Sektion: Dieses Gerät
+            // --- Sektion: Andere Geräte ---
+            if (devices.filter { device -> device.id != localId }.size > 1) {
+                Text(
+                    text = "Andere Geräte",
+                    color = TextGray,
+                    fontSize = 14.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
 
-        // Nimmt das erste Gerät der Liste als Hauptgerät
-        if (devices.find { device -> device.id == localId } != null) {
-            Text(
-                text = "Dieses Gerät",
-                color = TextGray,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            DeviceCard(device = devices.find { device -> device.id == localId } ?: devices.first(), offline = offline, fetchBatteryHistory)
-        } else {
-            RegistrationCard(offline, {onRegister()}, {onInherit()})
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-
-        if (devices.filter { device -> device.id != localId}.size > 1) {
-            // Sektion: Andere Geräte
-            Text(
-                text = "Andere Geräte",
-                color = TextGray,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-
-            // Rendert alle weiteren Geräte aus der Liste
-            devices.filter { device -> device.id != localId}.forEach { device ->
-                DeviceCard(device = device, offline = offline, fetchBatteryHistory)
-                Spacer(modifier = Modifier.height(12.dp))
+                devices.filter { device -> device.id != localId }.forEach { device ->
+                    DeviceCard(device = device, offline = offline, fetchBatteryHistory)
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
             }
-        }
 
-        Spacer(
-            modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars)
-        )
+            Spacer(
+                modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars)
+            )
+        }
     }
 }
 
@@ -276,11 +309,17 @@ fun DeviceCard(device: MainActivity.Device, offline: Boolean, fetchBatteryHistor
     var history by remember { mutableStateOf(BatteryHistory(day = emptyList(), week = emptyList())) }
     val view = LocalView.current
 
+    LaunchedEffect(device) {
+        isExpanded = false
+        history = BatteryHistory(day = emptyList(), week = emptyList())
+    }
+
     LaunchedEffect(isExpanded) {
-        if (isExpanded) view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+        if (isExpanded) view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
         if (isExpanded && (history.day.isEmpty() || history.week.isEmpty())) {
             isLoadingHistory = true
             fetchBatteryHistory(device.id) { result ->
+                view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
                 if (result != null) history = result
                 Log.d("Dashboard", "Haptic Feedback")
                 isLoadingHistory = false

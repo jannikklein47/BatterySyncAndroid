@@ -735,6 +735,18 @@ class MainActivity : ComponentActivity() {
                         },
                         fetchBatteryHistory = { deviceId, callback ->
                             getDeviceHistory(deviceId, callback)
+                        },
+                        refreshAll = { onComplete ->
+
+                            Thread {
+                                runBlocking {
+                                    delay(500)
+                                    loadAllData {
+                                        onComplete()
+                                    }
+                                }
+                            }.start()
+
                         }
                     )
                 }
